@@ -36,8 +36,33 @@ const REST_HOSTS = [
   'https://api-gcp.binance.com/api/v3',
 ];
 
+/**
+ * Zweitquelle fuer die Historie.
+ *
+ * Binance sperrt die REST-Schnittstelle aus manchen Rechenzentren komplett -
+ * genau das ist auf Render der Fall. Coinbase liefert dieselben Paare, ist
+ * von dort erreichbar, und die Kurse decken sich bis auf ein paar
+ * Zehntelprozent. Fuer eine Chart-Historie ist das mehr als genug.
+ */
+const COINBASE = 'https://api.exchange.coinbase.com';
+
+const COINBASE_GRANULARITY: Record<string, number> = {
+  '1m': 60,
+  '5m': 300,
+  '15m': 900,
+  '1h': 3_600,
+  '4h': 21_600,
+  '1d': 86_400,
+};
+
+/** BTCUSDT -> BTC-USD */
+function coinbaseProduct(symbol: string): string | null {
+  const base = symbol.replace(/USDT$/, '').replace(/USD$/, '');
+  return base.length >= 2 ? `${base}-USD` : null;
+}
+
 export type FeedStatus = 'connecting' | 'live' | 'simulated';
-export type HistoryStatus = 'unknown' | 'rest' | 'ticks-only';
+export type HistoryStatus = 'unknown' | 'binance' | 'coinbase' | 'ticks-only';
 
 /** So viele selbst gebaute Minutenkerzen behalten wir je Symbol. */
 const MAX_LIVE_CANDLES = 720;
@@ -246,7 +271,7 @@ export class MarketFeed {
           this.restHost = host;
           console.log(`[markt] Historie ueber ${host}`);
         }
-        this.historyStatus = 'rest';
+        this.historyStatus = 'binance';
 
         return rows.map((row) => ({
           t: row[0],
@@ -261,15 +286,87 @@ export class MarketFeed {
       }
     }
 
-    // Kein Host erreichbar. Es wird bewusst NICHTS erfunden - lieber eine
-    // kurze, richtige Historie aus eigenen Ticks als eine lange, falsche.
+    // Binance nicht erreichbar - Zweitquelle probieren.
+    const fromCoinbase = await this.fetchFromCoinbase(symbol, interval, limit, startTime, endTime);
+    if (fromCoinbase.length > 0) {
+      if (this.historyStatus !== 'coinbase') {
+        this.historyStatus = 'coinbase';
+        console.log('[markt] Binance-REST gesperrt, Historie kommt von Coinbase');
+      }
+      return fromCoinbase;
+    }
+
+    // Auch die Zweitquelle schweigt. Es wird bewusst NICHTS erfunden - lieber
+    // eine kurze, richtige Historie aus eigenen Ticks als eine lange, falsche.
     if (this.historyStatus !== 'ticks-only') {
       this.historyStatus = 'ticks-only';
       console.warn(
-        '[markt] Kurshistorie nicht erreichbar. Der Chart waechst aus den Live-Ticks mit.',
+        '[markt] Keine Kurshistorie erreichbar. Der Chart waechst aus den Live-Ticks mit.',
       );
     }
     return [];
+  }
+
+  /**
+   * Kerzen von Coinbase. Liefert hoechstens 300 Stueck pro Anfrage, neueste
+   * zuerst - fuer laengere Zeitraeume blaettern wir rueckwaerts.
+   */
+  private async fetchFromCoinbase(
+    symbol: string,
+    interval: string,
+    limit: number,
+    startTime?: number,
+    endTime?: number,
+  ): Promise<Candle[]> {
+    const product = coinbaseProduct(symbol);
+    const granularity = COINBASE_GRANULARITY[interval];
+    if (!product || !granularity) return [];
+
+    const collected = new Map<number, Candle>();
+    const wanted = Math.min(limit, 1_000);
+    const earliest = startTime ?? 0;
+    let end = endTime ?? Date.now();
+
+    for (let page = 0; page < 5 && collected.size < wanted; page += 1) {
+      const span = 300 * granularity * 1_000;
+      const start = Math.max(earliest, end - span);
+
+      const params = new URLSearchParams({
+        granularity: String(granularity),
+        start: new Date(start).toISOString(),
+        end: new Date(end).toISOString(),
+      });
+
+      try {
+        const response = await fetch(`${COINBASE}/products/${product}/candles?${params}`, {
+          headers: { 'User-Agent': 'TradeArena/1.0' },
+          signal: AbortSignal.timeout(10_000),
+        });
+        if (!response.ok) return [...collected.values()].sort((a, b) => a.t - b.t);
+
+        const rows = (await response.json()) as Array<[number, number, number, number, number, number]>;
+        if (!Array.isArray(rows) || rows.length === 0) break;
+
+        // Coinbase liefert [Zeit, Tief, Hoch, Eroeffnung, Schluss, Volumen].
+        for (const row of rows) {
+          collected.set(row[0] * 1_000, {
+            t: row[0] * 1_000,
+            o: row[3],
+            h: row[2],
+            l: row[1],
+            c: row[4],
+            v: row[5],
+          });
+        }
+
+        end = start;
+        if (start <= earliest) break;
+      } catch {
+        break;
+      }
+    }
+
+    return [...collected.values()].sort((a, b) => a.t - b.t).slice(-wanted);
   }
 
   private async refreshAllHistory(): Promise<void> {
