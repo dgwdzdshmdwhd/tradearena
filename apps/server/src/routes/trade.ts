@@ -29,8 +29,13 @@ import {
 } from '../util.js';
 import { assertMember } from './leagues.js';
 
-/** Erst nach so vielen Trades bekommt man seinen ersten Bot. Er muss verdient sein. */
-const TRADES_FOR_FIRST_BOT = 25;
+/**
+ * Erst nach so vielen Trades bekommt man seinen ersten Bot.
+ *
+ * Bewusst niedrig: der Bot ist das spielerischste am ganzen Ding, und wer ihn
+ * an einem Abend nie zu sehen bekommt, verpasst die Haelfte.
+ */
+const TRADES_FOR_FIRST_BOT = 5;
 
 export function registerTradeRoutes(app: FastifyInstance, ctx: Context): void {
   // --- Marktdaten ---------------------------------------------------------

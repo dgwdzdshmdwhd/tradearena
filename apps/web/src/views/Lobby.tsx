@@ -247,14 +247,14 @@ function CreateLeague({
   const [cash, setCash] = useState('100000');
   const [hours, setHours] = useState('168');
   const [leverage, setLeverage] = useState('1');
-  const [takerBps, setTakerBps] = useState('10');
+  const [takerBps, setTakerBps] = useState('5');
   const [scenarioKey, setScenarioKey] = useState(scenarios[0]?.key ?? 'covid');
   const [feedVisibility, setFeedVisibility] = useState('instant');
   const [portfolioVisibility, setPortfolioVisibility] = useState('open');
   const [rugpullMode, setRugpullMode] = useState('locked');
   const [botsAllowed, setBotsAllowed] = useState(true);
   const [coinsAllowed, setCoinsAllowed] = useState(true);
-  const [upgradesAllowed, setUpgradesAllowed] = useState(false);
+  const [upgradesAllowed, setUpgradesAllowed] = useState(true);
   const [busy, setBusy] = useState(false);
 
   const isReplay = mode === 'timemachine';
@@ -425,7 +425,7 @@ function CreateLeague({
             checked={upgradesAllowed}
             onChange={setUpgradesAllowed}
             label="Tycoon-Upgrades wirken lassen"
-            hint="Aus bedeutet: alle handeln zu identischen Konditionen."
+            hint="An: dein Trading-Desk wirkt sich aus. Aus: alle handeln zu identischen Konditionen."
           />
         </div>
 

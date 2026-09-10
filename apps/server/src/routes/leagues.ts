@@ -136,10 +136,13 @@ export function registerLeagueRoutes(app: FastifyInstance, ctx: Context): void {
       mode,
       status: 'running',
       starting_cash: startingCash.toString(),
-      taker_bps: clamp(int(body.takerBps, 10), 0, 500),
-      maker_bps: clamp(int(body.makerBps, 4), 0, 500),
+      // Bewusst grosszuegiger als ein echter Broker: die Mechanik bleibt
+      // dieselbe, sie tut nur weniger weh. Der Spread bleibt unangetastet -
+      // ohne ihn waere es kein Markt mehr.
+      taker_bps: clamp(int(body.takerBps, 5), 0, 500),
+      maker_bps: clamp(int(body.makerBps, 2), 0, 500),
       fixed_fee: big(String(body.fixedFeeCents ?? '0')).toString(),
-      slippage_factor_bps: clamp(int(body.slippageFactorBps, 8), 0, 200),
+      slippage_factor_bps: clamp(int(body.slippageFactorBps, 4), 0, 200),
       ref_depth: '500000000',
       short_borrow_bps: clamp(int(body.shortBorrowBps, 8), 0, 500),
       max_leverage: clamp(int(body.maxLeverage, preset.leverage), 1, 25),
@@ -155,7 +158,10 @@ export function registerLeagueRoutes(app: FastifyInstance, ctx: Context): void {
         : 'locked',
       bots_allowed: flag(body.botsAllowed === undefined ? preset.bots : Boolean(body.botsAllowed)),
       coins_allowed: flag(body.coinsAllowed === undefined ? preset.coins : Boolean(body.coinsAllowed)),
-      upgrades_allowed: flag(Boolean(body.upgradesAllowed)),
+      // Standardmaessig AN: sonst ist der ganze Trading-Desk im Spiel
+      // unsichtbar. Wer eine reine Wettkampfliga will, schaltet es beim
+      // Anlegen aus.
+      upgrades_allowed: flag(body.upgradesAllowed === undefined ? true : Boolean(body.upgradesAllowed)),
       survival_drawdown_bps: clamp(int(body.survivalDrawdownBps, 3_000), 500, 9_000),
       symbols: JSON.stringify(symbols),
       created_at: at,

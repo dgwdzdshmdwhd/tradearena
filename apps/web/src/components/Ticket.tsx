@@ -83,7 +83,11 @@ export function Ticket({
     sounds.click();
 
     try {
-      const result = await api.post<{ status: string; message: string }>('/api/orders', {
+      const result = await api.post<{
+        status: string;
+        message: string;
+        prestigeGained: number;
+      }>('/api/orders', {
         leagueId,
         instrumentId: instrument.id,
         side,
@@ -108,7 +112,12 @@ export function Ticket({
         kind: 'success',
         icon: side === 'buy' ? 'arrow-up' : 'arrow-down',
         title: result.status === 'filled' ? 'Ausgefuehrt' : 'Order liegt im Markt',
-        body: result.message,
+        // Der Prestige-Gewinn steht direkt an der Ausfuehrung. Ohne diese
+        // Rueckmeldung merkt niemand, dass der Trading-Desk mitwaechst.
+        body:
+          result.prestigeGained > 0
+            ? `${result.message} · +${result.prestigeGained} Prestige`
+            : result.message,
       });
 
       onDone();

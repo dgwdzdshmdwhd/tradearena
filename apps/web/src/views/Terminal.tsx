@@ -70,6 +70,14 @@ export function Terminal({ me, leagueId }: { me: Me; leagueId: string }): JSX.El
   const [mobileTab, setMobileTab] = useState<'chart' | 'order' | 'depot' | 'liga'>('chart');
   const [soundOn, setSoundOn] = useState(isSoundEnabled());
   const [feedStatus, setFeedStatus] = useState<string>('live');
+  // Der Trading-Desk waechst beim Spielen mit. Ohne diese Anzeige im
+  // Terminal bemerkt das niemand, und die ganze Tycoon-Ebene bleibt unsichtbar.
+  const [desk, setDesk] = useState({
+    prestige: me.prestige,
+    lifetime: me.lifetimePrestige,
+    rank: me.rank.title,
+    next: me.nextRank,
+  });
   const [showTutorial, setShowTutorial] = useState(
     () => localStorage.getItem('ta_tutorial_done') !== '1',
   );
@@ -120,6 +128,16 @@ export function Terminal({ me, leagueId }: { me: Me; leagueId: string }): JSX.El
     setCoins(data.coins);
   }, [leagueId]);
 
+  const loadDesk = useCallback(async () => {
+    const data = await api.get<Me>('/api/me');
+    setDesk({
+      prestige: data.prestige,
+      lifetime: data.lifetimePrestige,
+      rank: data.rank.title,
+      next: data.nextRank,
+    });
+  }, []);
+
   const loadCandles = useCallback(async () => {
     if (!selectedId) return;
     const data = await api.get<{ candles: Candle[] }>(
@@ -159,12 +177,13 @@ export function Terminal({ me, leagueId }: { me: Me; leagueId: string }): JSX.El
   useEffect(() => {
     const handle = setInterval(() => {
       quiet(loadFeed());
+      quiet(loadDesk());
       if (sidePanel === 'chat') quiet(loadChat());
       if (sidePanel === 'coins') quiet(loadCoins());
     }, 9_000);
 
     return () => clearInterval(handle);
-  }, [loadFeed, loadChat, loadCoins, sidePanel]);
+  }, [loadFeed, loadChat, loadCoins, loadDesk, sidePanel]);
 
   useLiveEvent((event, payload) => {
     if (event === 'trade') {
@@ -342,6 +361,20 @@ export function Terminal({ me, leagueId }: { me: Me; leagueId: string }): JSX.El
           </div>
 
           <button
+            className="btn btn-ghost btn-sm"
+            onClick={() => navigate('/desk')}
+            title={
+              desk.next
+                ? `${desk.lifetime} von ${desk.next.minPrestige} Prestige bis ${desk.next.title}`
+                : 'Trading-Desk'
+            }
+          >
+            <Icon name="sliders" size={13} />
+            <span className="hidden xl:inline">{desk.rank}</span>
+            <span className="num accent">{desk.prestige}</span>
+          </button>
+
+          <button
             className="btn btn-ghost btn-sm px-1.5"
             title={soundOn ? 'Ton aus' : 'Ton an'}
             onClick={async () => {
@@ -441,6 +474,7 @@ export function Terminal({ me, leagueId }: { me: Me; leagueId: string }): JSX.El
               quiet(loadPortfolio());
               quiet(loadBoard());
               quiet(loadFeed());
+              quiet(loadDesk());
             }}
           />
 

@@ -114,6 +114,24 @@ export interface FillSummary {
   feeCents: string;
   realizedCents: string;
   message: string;
+  /** Prestige, das dieser Trade eingebracht hat. */
+  prestigeGained: number;
+}
+
+/**
+ * Prestige fuer einen Trade.
+ *
+ * Ohne das waere die Tycoon-Ebene tot: Prestige gaebe es nur am Ligaende,
+ * und waehrend des Spielens wuerde sich stundenlang nichts bewegen.
+ *
+ * Die Deckelung je Trade ist wichtig. Ohne sie koennte man mit einer einzigen
+ * riesigen Order den halben Upgrade-Baum kaufen. Mit ihr bleibt der Weg
+ * dahin: viele Trades - und die kosten Gebuehren, sind also nicht gratis.
+ */
+export function prestigeForTrade(grossCents: Cents, realizedCents: Cents): number {
+  const volume = Math.min(15, Number(grossCents / 200_000n)); // 1 je 2.000 $
+  const bonus = realizedCents > 0n ? 5 : 0;
+  return Math.max(0, volume) + bonus;
 }
 
 export class Trading {
@@ -343,6 +361,7 @@ export class Trading {
       feeCents: '0',
       realizedCents: '0',
       message: 'Order liegt im Markt.',
+      prestigeGained: 0,
     };
   }
 
@@ -602,7 +621,7 @@ export class Trading {
       }
 
       // 9. Feed, Achievements, Benachrichtigungen
-      await this.afterFill({
+      const prestigeGained = await this.afterFill({
         league,
         account,
         instrument,
@@ -626,6 +645,7 @@ export class Trading {
         feeCents: fill.feeCents.toString(),
         realizedCents: applied.realizedCents.toString(),
         message: `${side === 'buy' ? 'Gekauft' : 'Verkauft'} zu ${fmtPrice(fill.price)} $`,
+        prestigeGained,
       };
     });
   }
@@ -866,7 +886,7 @@ export class Trading {
     source: string;
     tradesToday: number;
     at: number;
-  }): Promise<void> {
+  }): Promise<number> {
     const {
       league,
       account,
@@ -893,10 +913,20 @@ export class Trading {
       source,
     });
 
-    // Achievements werden nur fuer echte Spieler ausgewertet, nicht fuer Bots.
+    // Achievements und Prestige gibt es nur fuer echte Spieler. Sonst koennte
+    // man einen Bot nachts durchlaufen lassen und morgens den Upgrade-Baum
+    // fertig haben.
     if (source === 'bot') {
       this.hub.broadcastLeague(league.id, 'trade', { accountId: account.id });
-      return;
+      return 0;
+    }
+
+    const prestigeGained = prestigeForTrade(fill.grossCents, realized);
+    if (prestigeGained > 0) {
+      await this.db.run(
+        'UPDATE users SET prestige = prestige + ?, lifetime_prestige = lifetime_prestige + ? WHERE id = ?',
+        [prestigeGained, prestigeGained, account.userId],
+      );
     }
 
     const keys: string[] = [];
@@ -935,6 +965,7 @@ export class Trading {
     }
 
     this.hub.broadcastLeague(league.id, 'trade', { accountId: account.id });
+    return prestigeGained;
   }
 
   displayName(instrument: Instrument, league: League): string {

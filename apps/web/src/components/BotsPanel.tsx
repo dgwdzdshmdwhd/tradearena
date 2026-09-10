@@ -21,7 +21,7 @@ const STRATEGY_BLURB: Record<string, string> = {
   scalper: 'Viele Mini-Trades. Die Gebuehren fressen ihn, wenn die Liga teuer ist.',
 };
 
-const TRADES_FOR_FIRST_BOT = 25;
+const TRADES_FOR_FIRST_BOT = 5;
 
 export function BotsPanel({
   leagueId,

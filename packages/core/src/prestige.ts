@@ -50,7 +50,7 @@ export const UPGRADES: readonly UpgradeDef[] = [
     name: 'Broker-Tier',
     description: 'Retail -> Pro -> Prime. Jede Stufe senkt deine Gebuehren um 1 bp.',
     icon: '🏦',
-    costs: [200, 600, 1_500],
+    costs: [60, 180, 450],
     effect: { kind: 'fee_discount_bps', perLevel: 1 },
   },
   {
@@ -59,7 +59,7 @@ export const UPGRADES: readonly UpgradeDef[] = [
     name: 'Execution Desk',
     description: 'Bessere Orderausfuehrung: 10 % weniger Slippage je Stufe.',
     icon: '⚡',
-    costs: [300, 900, 2_400],
+    costs: [80, 240, 600],
     effect: { kind: 'slippage_reduction_pct', perLevel: 10 },
   },
   {
@@ -68,7 +68,7 @@ export const UPGRADES: readonly UpgradeDef[] = [
     name: 'Research-Abteilung',
     description: 'Schaltet zusaetzliche Indikatoren und das Level-2-Orderbuch frei.',
     icon: '🔬',
-    costs: [150, 500],
+    costs: [50, 150],
     effect: { kind: 'unlock', feature: 'advanced_indicators' },
   },
   {
@@ -77,7 +77,7 @@ export const UPGRADES: readonly UpgradeDef[] = [
     name: 'Volatilitaets-Radar',
     description: 'Warnt dich, bevor es wild wird.',
     icon: '📡',
-    costs: [400],
+    costs: [120],
     effect: { kind: 'unlock', feature: 'volatility_alerts' },
   },
   {
@@ -86,7 +86,7 @@ export const UPGRADES: readonly UpgradeDef[] = [
     name: 'Bot-Abteilung',
     description: 'Ein zusaetzlicher Bot-Platz je Stufe.',
     icon: '🤖',
-    costs: [500, 1_500, 4_000],
+    costs: [150, 400, 900],
     effect: { kind: 'bot_slots', perLevel: 1 },
   },
   {
@@ -95,7 +95,7 @@ export const UPGRADES: readonly UpgradeDef[] = [
     name: 'Bot-Akademie',
     description: 'Deine Bots lernen 25 % schneller je Stufe.',
     icon: '🎓',
-    costs: [350, 1_000],
+    costs: [100, 280],
     effect: { kind: 'bot_xp_pct', perLevel: 25 },
   },
   {
@@ -104,7 +104,7 @@ export const UPGRADES: readonly UpgradeDef[] = [
     name: 'Launchpad-Lizenz',
     description: 'Erlaubt dir, eigene Coins zu starten.',
     icon: '🪙',
-    costs: [250],
+    costs: [70],
     effect: { kind: 'unlock', feature: 'create_coins' },
   },
   {
@@ -113,7 +113,7 @@ export const UPGRADES: readonly UpgradeDef[] = [
     name: 'LP-Lock-Werkzeuge',
     description: 'Du kannst Liquiditaet sperren und bekommst ein Verified-Badge.',
     icon: '🔒',
-    costs: [800],
+    costs: [200],
     effect: { kind: 'unlock', feature: 'lp_lock' },
   },
   {
@@ -122,7 +122,7 @@ export const UPGRADES: readonly UpgradeDef[] = [
     name: 'Treasury',
     description: 'Zinsen auf ungenutztes Bargeld: 1 bp pro Tag je Stufe.',
     icon: '💰',
-    costs: [400, 1_200, 3_000],
+    costs: [120, 350, 800],
     effect: { kind: 'cash_interest_bps', perLevel: 1 },
   },
   {
@@ -131,7 +131,7 @@ export const UPGRADES: readonly UpgradeDef[] = [
     name: 'Terminal-Themes',
     description: 'Alternative Farbwelten fuer dein Terminal.',
     icon: '🎨',
-    costs: [100, 300, 700],
+    costs: [30, 90, 200],
     effect: { kind: 'cosmetic', item: 'theme' },
   },
   {
@@ -140,7 +140,7 @@ export const UPGRADES: readonly UpgradeDef[] = [
     name: 'Trophaeenschrank',
     description: 'Zeigt deine Achievements auf deinem Profil gross an.',
     icon: '🏆',
-    costs: [200],
+    costs: [60],
     effect: { kind: 'cosmetic', item: 'trophy_room' },
   },
 ];
@@ -239,12 +239,12 @@ export interface RankDef {
 
 export const RANKS: readonly RankDef[] = [
   { key: 'intern', title: 'Praktikant', minPrestige: 0, icon: '📎' },
-  { key: 'junior', title: 'Junior Trader', minPrestige: 250, icon: '📈' },
-  { key: 'trader', title: 'Trader', minPrestige: 750, icon: '💼' },
-  { key: 'senior', title: 'Senior Trader', minPrestige: 2_000, icon: '🥃' },
-  { key: 'pm', title: 'Portfolio Manager', minPrestige: 5_000, icon: '🎩' },
-  { key: 'whale', title: 'Wal', minPrestige: 12_000, icon: '🐋' },
-  { key: 'legend', title: 'Legende', minPrestige: 30_000, icon: '👑' },
+  { key: 'junior', title: 'Junior Trader', minPrestige: 120, icon: '📈' },
+  { key: 'trader', title: 'Trader', minPrestige: 400, icon: '💼' },
+  { key: 'senior', title: 'Senior Trader', minPrestige: 1_200, icon: '🥃' },
+  { key: 'pm', title: 'Portfolio Manager', minPrestige: 3_000, icon: '🎩' },
+  { key: 'whale', title: 'Wal', minPrestige: 8_000, icon: '🐋' },
+  { key: 'legend', title: 'Legende', minPrestige: 20_000, icon: '👑' },
 ];
 
 export function rankFor(prestige: number): RankDef {
