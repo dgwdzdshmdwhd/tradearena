@@ -77,7 +77,12 @@ export function registerTradeRoutes(app: FastifyInstance, ctx: Context): void {
       });
     }
 
-    return { instruments: out, feedStatus: ctx.feed.status, mode: league.mode };
+    return {
+      instruments: out,
+      feedStatus: ctx.feed.status,
+      historyStatus: ctx.feed.historyStatus,
+      mode: league.mode,
+    };
   });
 
   app.get('/api/leagues/:id/candles', async (request) => {

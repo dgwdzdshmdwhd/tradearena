@@ -2,15 +2,24 @@
  * Der Preis-Feed.
  *
  * EINE WebSocket-Verbindung zu Binance fuer alle Spieler zusammen. Egal ob
- * zwei oder fuenfzig Leute online sind - die Last zur Boerse bleibt gleich,
- * und niemand laeuft in ein Rate Limit. Die Kurse werden hier gecacht und
- * von `hub.ts` gedrosselt an die Browser verteilt.
+ * zwei oder fuenfzig Leute online sind - die Last zur Boerse bleibt gleich.
+ * `bookTicker` liefert echtes Bid und Ask, deshalb muss fuer Krypto kein
+ * Spread simuliert werden.
  *
- * `bookTicker` liefert echtes Bid und Ask. Deshalb muss fuer Krypto gar kein
- * Spread simuliert werden: Market Buy geht wirklich zum Ask, Sell zum Bid.
+ * ZWEI QUELLEN, DIE AUSEINANDERLAUFEN KOENNEN:
+ * Der Live-Kurs kommt ueber den WebSocket, die Kurshistorie ueber die
+ * REST-Schnittstelle. Binance sperrt REST fuer manche Rechenzentren (HTTP 451),
+ * waehrend der WebSocket weiter laeuft. Genau das ist im Betrieb passiert:
+ * erfundene Ersatz-Kerzen trafen auf einen echten Live-Kurs, und der Chart
+ * zeigte einen senkrechten Absturz von 3.700 auf 2.467.
  *
- * Faellt Binance aus oder ist nicht erreichbar, springt ein Simulator ein.
- * Lieber ein klar gekennzeichneter Ersatzkurs als eine tote App.
+ * Daraus zwei Lehren, die hier umgesetzt sind:
+ *   1. Mehrere REST-Hosts probieren, angefangen beim oeffentlichen
+ *      Datenspiegel data-api.binance.vision, der aus Rechenzentren
+ *      zuverlaessiger erreichbar ist.
+ *   2. Niemals Historie erfinden, die dem Live-Kurs widerspricht. Faellt REST
+ *      komplett aus, bauen wir die Kerzen aus den eigenen Live-Ticks. Die
+ *      Historie ist dann kurz - aber sie stimmt.
  */
 
 import { parsePrice, volatilityBps, type Candle, type Price, type Quote } from '@tradearena/core';
@@ -19,14 +28,27 @@ import WebSocket from 'ws';
 import { config } from './config.js';
 
 const BINANCE_WS = 'wss://stream.binance.com:9443/stream';
-const BINANCE_REST = 'https://api.binance.com/api/v3';
+
+/** In dieser Reihenfolge probiert. Der Datenspiegel zuerst. */
+const REST_HOSTS = [
+  'https://data-api.binance.vision/api/v3',
+  'https://api.binance.com/api/v3',
+  'https://api-gcp.binance.com/api/v3',
+];
 
 export type FeedStatus = 'connecting' | 'live' | 'simulated';
+export type HistoryStatus = 'unknown' | 'rest' | 'ticks-only';
+
+/** So viele selbst gebaute Minutenkerzen behalten wir je Symbol. */
+const MAX_LIVE_CANDLES = 720;
 
 interface SymbolState {
   quote: Quote;
-  candles: Candle[];
-  candlesFetchedAt: number;
+  /** Von der Boerse geholte Historie. */
+  history: Candle[];
+  /** Aus den eigenen Live-Ticks gebaute Minutenkerzen. */
+  live: Candle[];
+  historyFetchedAt: number;
 }
 
 export class MarketFeed {
@@ -35,8 +57,10 @@ export class MarketFeed {
   private reconnectAttempts = 0;
   private simulator: NodeJS.Timeout | null = null;
   private closed = false;
+  private restHost: string | null = null;
 
   status: FeedStatus = 'connecting';
+  historyStatus: HistoryStatus = 'unknown';
 
   constructor(readonly symbols: readonly string[]) {}
 
@@ -46,7 +70,7 @@ export class MarketFeed {
       return;
     }
     this.connect();
-    void this.refreshAllCandles();
+    void this.refreshAllHistory();
   }
 
   stop(): void {
@@ -59,8 +83,20 @@ export class MarketFeed {
     return this.state.get(symbol)?.quote ?? null;
   }
 
+  /**
+   * Kerzen fuer den Chart: geholte Historie plus die selbst gebauten
+   * Minutenkerzen. Doppelte Zeitstempel gewinnt die eigene Kerze, weil sie
+   * aktueller ist.
+   */
   candles(symbol: string): Candle[] {
-    return this.state.get(symbol)?.candles ?? [];
+    const entry = this.state.get(symbol);
+    if (!entry) return [];
+
+    const merged = new Map<number, Candle>();
+    for (const candle of entry.history) merged.set(candle.t, candle);
+    for (const candle of entry.live) merged.set(candle.t, candle);
+
+    return [...merged.values()].sort((a, b) => a.t - b.t);
   }
 
   volatility(symbol: string): number {
@@ -81,16 +117,13 @@ export class MarketFeed {
     return out;
   }
 
-  // --- Binance-WebSocket --------------------------------------------------
+  // --- WebSocket ----------------------------------------------------------
 
   private connect(): void {
     if (this.closed) return;
 
     const streams = this.symbols.map((symbol) => `${symbol.toLowerCase()}@bookTicker`).join('/');
-    const url = `${BINANCE_WS}?streams=${streams}`;
-
-    this.status = this.state.size > 0 ? this.status : 'connecting';
-    const socket = new WebSocket(url);
+    const socket = new WebSocket(`${BINANCE_WS}?streams=${streams}`);
     this.socket = socket;
 
     socket.on('open', () => {
@@ -109,7 +142,7 @@ export class MarketFeed {
         if (!data?.s || !data.b || !data.a) return;
         this.applyBookTicker(data.s, data.b, data.a);
       } catch {
-        // Kaputte Nachricht einfach verwerfen - der naechste Tick kommt gleich.
+        // Kaputte Nachricht verwerfen, der naechste Tick kommt gleich.
       }
     });
 
@@ -121,7 +154,6 @@ export class MarketFeed {
       if (this.closed) return;
       this.reconnectAttempts += 1;
 
-      // Nach drei Fehlversuchen ist klar: Binance ist gerade nicht erreichbar.
       if (this.reconnectAttempts >= 3 && this.status !== 'simulated') {
         this.startSimulator('Binance nicht erreichbar');
       }
@@ -136,21 +168,52 @@ export class MarketFeed {
     const ask = parsePrice(askRaw);
     if (bid <= 0n || ask <= 0n) return;
 
-    const existing = this.state.get(symbol);
-    const quote: Quote = { bid, ask, last: (bid + ask) / 2n, at: Date.now() };
+    const last = (bid + ask) / 2n;
+    const quote: Quote = { bid, ask, last, at: Date.now() };
+    const entry = this.state.get(symbol);
 
-    if (existing) {
-      existing.quote = quote;
-    } else {
-      this.state.set(symbol, { quote, candles: [], candlesFetchedAt: 0 });
+    if (!entry) {
+      this.state.set(symbol, { quote, history: [], live: [], historyFetchedAt: 0 });
+      this.appendTick(symbol, last);
+      return;
     }
+
+    entry.quote = quote;
+    this.appendTick(symbol, last);
   }
 
-  // --- Historische Kerzen -------------------------------------------------
+  /**
+   * Aus dem Tick eine Minutenkerze bauen bzw. die laufende fortschreiben.
+   * Damit hat der Chart immer echte Daten, die zum Live-Kurs passen -
+   * auch wenn die Boersen-Historie gar nicht erreichbar ist.
+   */
+  private appendTick(symbol: string, price: Price): void {
+    const entry = this.state.get(symbol);
+    if (!entry) return;
+
+    const value = Number(price) / 1e8;
+    if (!Number.isFinite(value) || value <= 0) return;
+
+    const minute = Math.floor(Date.now() / 60_000) * 60_000;
+    const current = entry.live[entry.live.length - 1];
+
+    if (current && current.t === minute) {
+      current.c = value;
+      current.h = Math.max(current.h, value);
+      current.l = Math.min(current.l, value);
+      current.v += 1;
+      return;
+    }
+
+    entry.live.push({ t: minute, o: value, h: value, l: value, c: value, v: 1 });
+    if (entry.live.length > MAX_LIVE_CANDLES) entry.live.shift();
+  }
+
+  // --- Historie -----------------------------------------------------------
 
   /**
-   * Kerzen von Binance holen. Wird fuer Charts, Indikatoren, die
-   * Volatilitaets-Schaetzung und die Zeitmaschine gebraucht.
+   * Kerzen von der Boerse holen. Probiert die Hosts der Reihe nach und merkt
+   * sich den, der geantwortet hat.
    */
   async fetchCandles(
     symbol: string,
@@ -159,56 +222,82 @@ export class MarketFeed {
     startTime?: number,
     endTime?: number,
   ): Promise<Candle[]> {
-    if (config.offline) return simulateCandles(symbol, limit, interval);
+    if (config.offline) return [];
 
     const params = new URLSearchParams({ symbol, interval, limit: String(Math.min(1000, limit)) });
     if (startTime) params.set('startTime', String(startTime));
     if (endTime) params.set('endTime', String(endTime));
 
-    try {
-      const response = await fetch(`${BINANCE_REST}/klines?${params.toString()}`, {
-        signal: AbortSignal.timeout(10_000),
-      });
-      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    const hosts = this.restHost ? [this.restHost, ...REST_HOSTS] : REST_HOSTS;
 
-      const rows = (await response.json()) as Array<[number, string, string, string, string, string]>;
-      return rows.map((row) => ({
-        t: row[0],
-        o: Number(row[1]),
-        h: Number(row[2]),
-        l: Number(row[3]),
-        c: Number(row[4]),
-        v: Number(row[5]),
-      }));
-    } catch {
-      return simulateCandles(symbol, limit, interval);
+    for (const host of hosts) {
+      try {
+        const response = await fetch(`${host}/klines?${params.toString()}`, {
+          signal: AbortSignal.timeout(10_000),
+        });
+        if (!response.ok) continue;
+
+        const rows = (await response.json()) as Array<
+          [number, string, string, string, string, string]
+        >;
+        if (!Array.isArray(rows)) continue;
+
+        if (this.restHost !== host) {
+          this.restHost = host;
+          console.log(`[markt] Historie ueber ${host}`);
+        }
+        this.historyStatus = 'rest';
+
+        return rows.map((row) => ({
+          t: row[0],
+          o: Number(row[1]),
+          h: Number(row[2]),
+          l: Number(row[3]),
+          c: Number(row[4]),
+          v: Number(row[5]),
+        }));
+      } catch {
+        // naechsten Host probieren
+      }
     }
+
+    // Kein Host erreichbar. Es wird bewusst NICHTS erfunden - lieber eine
+    // kurze, richtige Historie aus eigenen Ticks als eine lange, falsche.
+    if (this.historyStatus !== 'ticks-only') {
+      this.historyStatus = 'ticks-only';
+      console.warn(
+        '[markt] Kurshistorie nicht erreichbar. Der Chart waechst aus den Live-Ticks mit.',
+      );
+    }
+    return [];
   }
 
-  private async refreshAllCandles(): Promise<void> {
+  private async refreshAllHistory(): Promise<void> {
     for (const symbol of this.symbols) {
       const candles = await this.fetchCandles(symbol, '1m', 300);
+      if (candles.length === 0) continue;
+
       const entry = this.state.get(symbol);
       if (entry) {
-        entry.candles = candles;
-        entry.candlesFetchedAt = Date.now();
-      } else if (candles.length > 0) {
+        entry.history = candles;
+        entry.historyFetchedAt = Date.now();
+      } else {
         const last = parsePrice(String(candles[candles.length - 1]!.c));
         this.state.set(symbol, {
           quote: { bid: last, ask: last, last, at: Date.now() },
-          candles,
-          candlesFetchedAt: Date.now(),
+          history: candles,
+          live: [],
+          historyFetchedAt: Date.now(),
         });
       }
     }
 
     if (!this.closed) {
-      // Einmal pro Minute nachladen reicht - der Live-Kurs kommt ja per WebSocket.
-      setTimeout(() => void this.refreshAllCandles(), 60_000);
+      setTimeout(() => void this.refreshAllHistory(), 60_000);
     }
   }
 
-  // --- Simulator als Rueckfallebene ---------------------------------------
+  // --- Simulator (nur ohne Internet) --------------------------------------
 
   private startSimulator(reason: string): void {
     if (this.simulator) return;
@@ -218,29 +307,25 @@ export class MarketFeed {
 
     for (const symbol of this.symbols) {
       if (!this.state.has(symbol)) {
-        const seed = SIMULATED_START[symbol] ?? 100;
-        const price = parsePrice(String(seed));
+        const price = parsePrice(String(SIMULATED_START[symbol] ?? 100));
         this.state.set(symbol, {
           quote: { bid: price, ask: price, last: price, at: Date.now() },
-          candles: simulateCandles(symbol, 300, '1m'),
-          candlesFetchedAt: Date.now(),
+          history: [],
+          live: [],
+          historyFetchedAt: Date.now(),
         });
       }
     }
 
     this.simulator = setInterval(() => {
-      for (const [, entry] of this.state) {
-        // Zufaelliger Gang mit leichtem Zittern, damit sich etwas bewegt.
+      for (const [symbol, entry] of this.state) {
         const drift = (Math.random() - 0.5) * 0.002;
         const next = Number(entry.quote.last) * (1 + drift);
         const last = BigInt(Math.max(1, Math.round(next)));
         const halfSpread = last / 5_000n;
-        entry.quote = {
-          bid: last - halfSpread,
-          ask: last + halfSpread,
-          last,
-          at: Date.now(),
-        };
+
+        entry.quote = { bid: last - halfSpread, ask: last + halfSpread, last, at: Date.now() };
+        this.appendTick(symbol, last);
       }
     }, 1_000);
   }
@@ -278,30 +363,7 @@ export function intervalMs(interval: string): number {
   return INTERVAL_MS[interval] ?? 60_000;
 }
 
-/** Erfundene, aber plausibel aussehende Kerzen fuer den Notfall. */
-function simulateCandles(symbol: string, limit: number, interval: string): Candle[] {
-  const step = intervalMs(interval);
-  const start = SIMULATED_START[symbol] ?? 100;
-  const candles: Candle[] = [];
-
-  let price = start;
-  let time = Date.now() - limit * step;
-
-  for (let i = 0; i < limit; i += 1) {
-    const open = price;
-    const move = (Math.random() - 0.5) * 0.01;
-    price = Math.max(0.000001, price * (1 + move));
-    const high = Math.max(open, price) * (1 + Math.random() * 0.002);
-    const low = Math.min(open, price) * (1 - Math.random() * 0.002);
-
-    candles.push({ t: time, o: open, h: high, l: low, c: price, v: 100 + Math.random() * 900 });
-    time += step;
-  }
-
-  return candles;
-}
-
-/** Preis in eine `Quote` verwandeln, wenn nur ein Kurs bekannt ist. */
+/** Ein Kurs zu einer `Quote` machen, wenn die Quelle kein Bid/Ask liefert. */
 export function quoteFromPrice(price: Price, spreadBps = 4): Quote {
   const half = (price * BigInt(spreadBps)) / 20_000n;
   return {

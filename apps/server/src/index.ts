@@ -73,6 +73,9 @@ async function main(): Promise<void> {
   app.get('/healthz', async () => ({
     ok: true,
     feed: feed.status,
+    // 'rest' = Kurshistorie kommt von der Boerse, 'ticks-only' = die Boerse
+    // sperrt hier die REST-Schnittstelle, der Chart waechst aus Live-Ticks.
+    history: feed.historyStatus,
     connections: hub.connections,
     at: now(),
   }));
