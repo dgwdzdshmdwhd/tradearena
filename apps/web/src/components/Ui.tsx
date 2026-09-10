@@ -107,7 +107,7 @@ export function Tabs<T extends string>({
         <button
           key={tab}
           onClick={() => onChange(tab)}
-          className={`relative whitespace-nowrap px-3 py-1.5 text-[11.5px] font-medium transition ${
+          className={`relative whitespace-nowrap px-3 py-1.5 text-[13px] font-medium transition ${
             active === tab
               ? 'text-[var(--color-fg)]'
               : 'text-[var(--color-fg-3)] hover:text-[var(--color-fg-2)]'
@@ -150,7 +150,7 @@ export function Segmented<T extends string>({
           <button
             key={option.value}
             onClick={() => onChange(option.value)}
-            className={`rounded-[4px] py-1.5 text-[12px] font-medium transition ${
+            className={`rounded-[4px] py-1.5 text-[13.5px] font-medium transition ${
               active ? tone : 'text-[var(--color-fg-3)] hover:text-[var(--color-fg-2)]'
             }`}
           >
@@ -175,7 +175,7 @@ export function Field({
     <label className="block">
       <span className="label">{label}</span>
       {children}
-      {hint ? <span className="dimmer mt-1 block text-[11px] leading-snug">{hint}</span> : null}
+      {hint ? <span className="dimmer mt-1 block text-[12.5px] leading-snug">{hint}</span> : null}
     </label>
   );
 }
@@ -213,8 +213,8 @@ export function Toggle({
         />
       </span>
       <span className="min-w-0">
-        <span className="block text-[12.5px]">{label}</span>
-        {hint ? <span className="dimmer block text-[11px] leading-snug">{hint}</span> : null}
+        <span className="block text-[14px]">{label}</span>
+        {hint ? <span className="dimmer block text-[12.5px] leading-snug">{hint}</span> : null}
       </span>
     </button>
   );
@@ -306,7 +306,7 @@ export function Status({
     tone === 'live' ? 'var(--color-up)' : tone === 'warn' ? 'var(--color-accent)' : 'var(--color-fg-3)';
 
   return (
-    <span className="dimmer inline-flex items-center gap-1.5 text-[11px]">
+    <span className="dimmer inline-flex items-center gap-1.5 text-[12.5px]">
       <span className="dot" style={{ background: color }} />
       {children}
     </span>
@@ -328,9 +328,9 @@ export function Empty({
       <span className="mb-3 text-[var(--color-fg-3)]">
         <Icon name={icon} size={22} strokeWidth={1.25} />
       </span>
-      <div className="mb-1 text-[13px] font-medium">{title}</div>
+      <div className="mb-1 text-[15px] font-medium">{title}</div>
       {children ? (
-        <p className="dimmer max-w-[26rem] text-[11.5px] leading-relaxed">{children}</p>
+        <p className="dimmer max-w-[26rem] text-[13px] leading-relaxed">{children}</p>
       ) : null}
     </div>
   );
@@ -351,8 +351,8 @@ export function Metric({
   return (
     <div>
       <div className="stat-label">{label}</div>
-      <div className={`num text-[13px] ${tone ?? ''}`}>{value}</div>
-      {sub ? <div className="dimmer num text-[10.5px]">{sub}</div> : null}
+      <div className={`num text-[15px] ${tone ?? ''}`}>{value}</div>
+      {sub ? <div className="dimmer num text-[12px]">{sub}</div> : null}
     </div>
   );
 }

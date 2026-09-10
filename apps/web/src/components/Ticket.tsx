@@ -208,7 +208,7 @@ export function Ticket({
                 </option>
               ))}
             </select>
-            <p className="dimmer mt-1.5 text-[11px] leading-snug">{selected?.hint}</p>
+            <p className="dimmer mt-1.5 text-[12.5px] leading-snug">{selected?.hint}</p>
           </div>
         ) : null}
 
@@ -216,15 +216,17 @@ export function Ticket({
           <div className="mb-1 flex items-center justify-between">
             <span className="label mb-0">{useNotional ? 'Betrag ($)' : 'Menge'}</span>
             <button
-              className="dimmer text-[10.5px] underline decoration-dotted underline-offset-2 hover:text-[var(--color-fg-2)]"
+              className="dimmer text-[12px] underline decoration-dotted underline-offset-2 hover:text-[var(--color-fg-2)]"
               onClick={() => setUseNotional(!useNotional)}
             >
               {useNotional ? 'in Stueck' : 'in Dollar'}
             </button>
           </div>
 
+          {/* Im einfachen Modus ist der Betrag die Hauptfigur des Tickets -
+              gross genug, dass man ihn nicht sucht. */}
           <input
-            className="input"
+            className={`input ${simple ? 'input-hero' : ''}`}
             value={amount}
             onChange={(event) => setAmount(event.target.value)}
             inputMode="decimal"
@@ -327,7 +329,7 @@ export function Ticket({
         ) : null}
 
         {preview ? (
-          <div className="rounded-[var(--radius)] border border-[var(--color-hairline)] bg-[var(--color-bg)] p-2 text-[11px]">
+          <div className="rounded-[var(--radius)] border border-[var(--color-hairline)] bg-[var(--color-bg)] p-2 text-[12.5px]">
             <Row label="Menge" value={fmtQty(preview.qty)} />
             <Row label="Kurs" value={`${fmtPrice(preview.price)} $`} />
             <Row label="Volumen" value={fmtUsd(preview.grossCents)} />
@@ -347,7 +349,7 @@ export function Ticket({
 
         <button
           className={`btn w-full ${side === 'buy' ? 'btn-buy' : 'btn-sell'} ${
-            simple ? 'h-11 text-[15px]' : ''
+            simple ? 'btn-lg' : ''
           }`}
           onClick={() => void submit()}
           disabled={busy || !instrument}
@@ -358,14 +360,14 @@ export function Ticket({
 
         {simple ? (
           <button
-            className="dimmer w-full text-center text-[11px] hover:text-[var(--color-fg-2)]"
+            className="dimmer w-full text-center text-[12.5px] hover:text-[var(--color-fg-2)]"
             onClick={() => setAdvanced(!advanced)}
           >
             {advanced ? 'weniger anzeigen' : 'Limit, Stop und mehr'}
           </button>
         ) : null}
 
-        <div className="space-y-0.5 text-[11px]">
+        <div className="space-y-0.5 text-[12.5px]">
           {portfolio ? (
             <Row label="Kaufkraft" value={fmtUsd(portfolio.margin.buyingPowerCents)} />
           ) : null}

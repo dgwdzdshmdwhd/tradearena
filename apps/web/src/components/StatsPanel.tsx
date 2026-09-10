@@ -174,7 +174,7 @@ export function StatsPanel({ leagueId }: { leagueId: string }): JSX.Element {
                       <span className={trade.side === 'buy' ? 'up' : 'down'}>
                         <Icon name={trade.side === 'buy' ? 'arrow-up' : 'arrow-down'} size={11} />
                       </span>
-                      <span className="text-[12px]">{trade.display}</span>
+                      <span className="text-[13.5px]">{trade.display}</span>
                       {trade.source === 'bot' ? (
                         <span className="dimmer">
                           <Icon name="cpu" size={10} />
@@ -189,15 +189,15 @@ export function StatsPanel({ leagueId }: { leagueId: string }): JSX.Element {
                   </td>
                   <td className="num r">
                     {fmtQty(trade.qty)}
-                    <span className="dimmer block text-[10.5px]">{fmtPrice(trade.price)}</span>
+                    <span className="dimmer block text-[12px]">{fmtPrice(trade.price)}</span>
                   </td>
                   <td className="num r">
                     <span className={signClass(Number(trade.realized))}>
                       {Number(trade.realized) === 0 ? '—' : fmtUsd(trade.realized, true)}
                     </span>
-                    <span className="dimmer block text-[10.5px]">{fmtUsd(trade.fee)}</span>
+                    <span className="dimmer block text-[12px]">{fmtUsd(trade.fee)}</span>
                   </td>
-                  <td className="num r dimmer text-[10.5px]">{fmtTime(trade.executed_at)}</td>
+                  <td className="num r dimmer text-[12px]">{fmtTime(trade.executed_at)}</td>
                 </tr>
               ))}
             </tbody>

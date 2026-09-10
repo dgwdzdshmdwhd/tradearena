@@ -90,12 +90,12 @@ export function Onboarding({ onClose }: { onClose: () => void }): JSX.Element {
           <span className="accent mb-4 inline-block">
             <Icon name={current.icon} size={20} strokeWidth={1.4} />
           </span>
-          <h2 className="mb-2 text-[15px] font-medium">{current.title}</h2>
-          <p className="dim text-[12.5px] leading-relaxed">{current.body}</p>
+          <h2 className="mb-2 text-[17px] font-medium">{current.title}</h2>
+          <p className="dim text-[14px] leading-relaxed">{current.body}</p>
         </div>
 
         <div className="flex items-center justify-between border-t border-[var(--color-hairline)] p-3">
-          <button className="dimmer text-[11px] hover:text-[var(--color-fg-2)]" onClick={onClose}>
+          <button className="dimmer text-[12.5px] hover:text-[var(--color-fg-2)]" onClick={onClose}>
             ueberspringen
           </button>
 

@@ -14,13 +14,13 @@ const INTERVALS = ['1m', '5m', '15m', '1h', '1d'] as const;
 
 /** Farben aus dem Designsystem - die Bibliothek kann keine CSS-Variablen. */
 const COLORS = {
-  up: '#31c48d',
-  down: '#f05252',
-  accent: '#d4a24c',
-  info: '#5b8def',
-  text: '#646e7d',
-  grid: 'rgba(28,33,40,0.75)',
-  border: '#1c2128',
+  up: '#22c55e',
+  down: '#ef4444',
+  accent: '#f5b52e',
+  info: '#7c8cff',
+  text: '#6b7789',
+  grid: 'rgba(31,39,51,0.8)',
+  border: '#1f2733',
 };
 
 export function Chart({
@@ -58,7 +58,7 @@ export function Chart({
         background: { type: ColorType.Solid, color: 'transparent' },
         textColor: COLORS.text,
         fontFamily: "'IBM Plex Mono', ui-monospace, monospace",
-        fontSize: 10,
+        fontSize: 11,
       },
       grid: {
         vertLines: { color: COLORS.grid },
@@ -68,8 +68,8 @@ export function Chart({
       timeScale: { borderColor: COLORS.border, timeVisible: true, secondsVisible: false },
       crosshair: {
         mode: CrosshairMode.Normal,
-        vertLine: { color: COLORS.text, labelBackgroundColor: '#1b2027' },
-        horzLine: { color: COLORS.text, labelBackgroundColor: '#1b2027' },
+        vertLine: { color: COLORS.text, labelBackgroundColor: '#252e3d' },
+        horzLine: { color: COLORS.text, labelBackgroundColor: '#252e3d' },
       },
     });
 
@@ -150,7 +150,7 @@ export function Chart({
       clean.map((candle) => ({
         time: candle.time,
         value: candle.v,
-        color: candle.c >= candle.o ? 'rgba(49,196,141,0.25)' : 'rgba(240,82,82,0.25)',
+        color: candle.c >= candle.o ? 'rgba(34,197,94,0.28)' : 'rgba(239,68,68,0.28)',
       })),
     );
 
@@ -182,14 +182,14 @@ export function Chart({
   return (
     <div className="panel flex min-h-0 flex-1 flex-col">
       <div className="panel-head">
-        <span className="num truncate normal-case tracking-normal text-[12px] text-[var(--color-fg)]">
+        <span className="num truncate normal-case tracking-normal text-[13.5px] text-[var(--color-fg)]">
           {title}
         </span>
 
         <div className="flex items-center gap-0.5">
           {rsiValue !== null ? (
             <span
-              className={`num mr-1.5 text-[10px] ${
+              className={`num mr-1.5 text-[11px] ${
                 rsiValue > 70 ? 'down' : rsiValue < 30 ? 'up' : 'dimmer'
               }`}
             >
@@ -234,7 +234,7 @@ function Chip({
   return (
     <button
       onClick={onClick}
-      className={`num rounded-[4px] px-1.5 py-0.5 text-[10px] normal-case tracking-normal transition ${
+      className={`num rounded-[4px] px-1.5 py-0.5 text-[11px] normal-case tracking-normal transition ${
         active
           ? 'bg-[var(--color-raised)] text-[var(--color-fg)]'
           : 'text-[var(--color-fg-3)] hover:text-[var(--color-fg-2)]'

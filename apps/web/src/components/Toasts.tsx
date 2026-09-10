@@ -44,9 +44,9 @@ export function Toasts(): JSX.Element {
                     {tone.label}
                   </div>
                 ) : null}
-                <div className="text-[12.5px] font-medium leading-snug">{toast.title}</div>
+                <div className="text-[14px] font-medium leading-snug">{toast.title}</div>
                 {toast.body ? (
-                  <div className="dimmer mt-0.5 text-[11px] leading-snug">{toast.body}</div>
+                  <div className="dimmer mt-0.5 text-[12.5px] leading-snug">{toast.body}</div>
                 ) : null}
               </div>
             </div>

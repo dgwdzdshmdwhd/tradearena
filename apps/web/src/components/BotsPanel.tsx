@@ -91,8 +91,8 @@ export function BotsPanel({
             <span className="dimmer mb-3 inline-block">
               <Icon name="cpu" size={22} strokeWidth={1.25} />
             </span>
-            <div className="mb-1 text-[13px] font-medium">Dein erster Bot muss verdient werden</div>
-            <p className="dimmer mb-3 text-[11.5px]">
+            <div className="mb-1 text-[15px] font-medium">Dein erster Bot muss verdient werden</div>
+            <p className="dimmer mb-3 text-[13px]">
               Noch <span className="num">{slots.tradesNeeded}</span> Trades.
             </p>
             <div className="meter mx-auto max-w-[13rem]">
@@ -113,27 +113,27 @@ export function BotsPanel({
                   </span>
                   <div className="min-w-0">
                     <div className="flex items-center gap-1.5">
-                      <b className="num text-[12.5px] font-medium">{bot.name}</b>
-                      <span className="dimmer text-[10px]">Lv {bot.level}</span>
+                      <b className="num text-[14px] font-medium">{bot.name}</b>
+                      <span className="dimmer text-[11px]">Lv {bot.level}</span>
                       {bot.status !== 'running' ? (
-                        <span className="dimmer text-[9.5px] uppercase tracking-wider">
+                        <span className="dimmer text-[11px] uppercase tracking-wider">
                           pausiert
                         </span>
                       ) : null}
                     </div>
-                    <div className="dimmer truncate text-[10.5px]">
+                    <div className="dimmer truncate text-[12px]">
                       {bot.strategy} · {bot.display} · {bot.trades_count} Trades
                     </div>
                   </div>
                 </div>
 
                 <div className="text-right">
-                  <div className="num text-[12.5px]">{fmtUsd(bot.equity)}</div>
-                  <div className={`num text-[10.5px] ${signClass(bps)}`}>{fmtBps(bps)}</div>
+                  <div className="num text-[14px]">{fmtUsd(bot.equity)}</div>
+                  <div className={`num text-[12px] ${signClass(bps)}`}>{fmtBps(bps)}</div>
                 </div>
               </div>
 
-              <div className="mt-2 grid grid-cols-2 gap-x-3 text-[10.5px]">
+              <div className="mt-2 grid grid-cols-2 gap-x-3 text-[12px]">
                 <div className="flex justify-between">
                   <span className="dimmer">Fehlerquote</span>
                   <span className="num">{(bot.error_rate_bps / 100).toFixed(1)} %</span>
@@ -145,7 +145,7 @@ export function BotsPanel({
               </div>
 
               {bot.decisions.length > 0 ? (
-                <div className="mt-2 max-h-28 space-y-1 overflow-y-auto rounded-[4px] bg-[var(--color-bg)] p-1.5 text-[10.5px]">
+                <div className="mt-2 max-h-28 space-y-1 overflow-y-auto rounded-[4px] bg-[var(--color-bg)] p-1.5 text-[12px]">
                   {bot.decisions.map((decision) => (
                     <div key={decision.id} className="flex gap-1.5">
                       <span className="dimmer num shrink-0">{fmtTime(decision.at)}</span>
@@ -154,7 +154,7 @@ export function BotsPanel({
                   ))}
                 </div>
               ) : (
-                <p className="dimmer mt-2 text-[10.5px]">Wartet auf ein Signal.</p>
+                <p className="dimmer mt-2 text-[12px]">Wartet auf ein Signal.</p>
               )}
 
               <div className="mt-2 flex flex-wrap gap-1">
@@ -282,8 +282,8 @@ function CreateBot({
                     : 'border-[var(--color-hairline)] hover:border-[var(--color-border)]'
                 }`}
               >
-                <div className="text-[12.5px] font-medium">{entry.label}</div>
-                <div className="dimmer text-[11px] leading-snug">
+                <div className="text-[14px] font-medium">{entry.label}</div>
+                <div className="dimmer text-[12.5px] leading-snug">
                   {STRATEGY_BLURB[entry.key] ?? ''}
                 </div>
               </button>
@@ -310,7 +310,7 @@ function CreateBot({
           </Field>
         </div>
 
-        <p className="dimmer text-[11px] leading-relaxed">
+        <p className="dimmer text-[12.5px] leading-relaxed">
           Das Budget wandert auf ein eigenes Bot-Konto. Der Bot zahlt dieselben Gebuehren wie du und
           sieht dieselben Kurse — und er macht Fehler. Mit jedem Level werden es weniger, nie null.
         </p>

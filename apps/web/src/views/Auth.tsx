@@ -62,10 +62,10 @@ export function Auth({
     <div className="flex min-h-full items-center justify-center p-5">
       <div className="w-full max-w-[21rem]">
         <div className="mb-7">
-          <div className="num text-[22px] font-semibold tracking-[-0.02em]">
+          <div className="num text-[28px] font-semibold tracking-[-0.02em]">
             TRADE<span className="accent">ARENA</span>
           </div>
-          <p className="dim mt-1.5 text-[12.5px] leading-relaxed">
+          <p className="dim mt-1.5 text-[14px] leading-relaxed">
             Echte Kurse, Spielgeld, deine Freunde.
           </p>
         </div>
@@ -78,13 +78,13 @@ export function Auth({
                 <Icon name={MODE_ICONS[invite.mode] ?? 'candles'} size={16} />
               </span>
               <div className="min-w-0">
-                <div className="text-[13px] font-medium">{invite.name}</div>
-                <div className="dimmer text-[11px]">
+                <div className="text-[15px] font-medium">{invite.name}</div>
+                <div className="dimmer text-[12.5px]">
                   {MODE_LABELS[invite.mode] ?? invite.mode} · {invite.members}{' '}
                   {invite.members === 1 ? 'Spieler' : 'Spieler'}
                   {invite.owner ? ` · von ${invite.owner}` : ''}
                 </div>
-                <div className="dimmer num mt-1 text-[11px]">
+                <div className="dimmer num mt-1 text-[12.5px]">
                   Startkapital {fmtUsd(invite.startingCashCents)}
                 </div>
               </div>
@@ -130,7 +130,7 @@ export function Auth({
 
           {error ? (
             <div
-              className="down mb-3 flex items-start gap-2 rounded-[var(--radius)] border p-2 text-[12px] leading-snug"
+              className="down mb-3 flex items-start gap-2 rounded-[var(--radius)] border p-2 text-[13.5px] leading-snug"
               style={{
                 borderColor: 'color-mix(in srgb, var(--color-down) 40%, transparent)',
                 background: 'color-mix(in srgb, var(--color-down) 10%, transparent)',
@@ -146,7 +146,7 @@ export function Auth({
           </button>
         </form>
 
-        <p className="dimmer mt-4 text-[11px] leading-relaxed">
+        <p className="dimmer mt-4 text-[12.5px] leading-relaxed">
           Kein echtes Geld, keine Einzahlung, keine E-Mail-Adresse. Nur ein Name, ein Passwort
           und ein Einladungslink von deinen Freunden.
         </p>

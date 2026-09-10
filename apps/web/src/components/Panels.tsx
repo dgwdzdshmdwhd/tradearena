@@ -60,7 +60,7 @@ export function Watchlist({
             <Icon name="search" size={12} />
           </span>
           <input
-            className="input h-7 border-0 bg-transparent px-0 text-[12px] focus:shadow-none"
+            className="input h-7 border-0 bg-transparent px-0 text-[13.5px] focus:shadow-none"
             placeholder="suchen"
             value={filter}
             onChange={(event) => setFilter(event.target.value)}
@@ -87,14 +87,31 @@ export function Watchlist({
               {/* Die Kennzeichnung steht nur bei Coins - bei zehn
                   Krypto-Zeilen waere "Krypto" darunter reines Rauschen. */}
               <span className="flex min-w-0 items-center gap-1.5">
-                <span className="truncate text-[12.5px]">{instrument.display}</span>
+                <span className="truncate text-[14.5px] font-medium">{instrument.display}</span>
                 {instrument.kind === 'coin' ? (
-                  <span className="dimmer shrink-0 text-[9.5px] uppercase tracking-wider">
+                  <span className="dimmer shrink-0 text-[11px] uppercase tracking-wider">
                     Coin
                   </span>
                 ) : null}
               </span>
-              <LivePrice value={last} className="text-[12.5px]" />
+
+              <span className="flex shrink-0 flex-col items-end gap-0.5">
+                <LivePrice value={last} className="text-[14px]" />
+                {instrument.changeBps !== null ? (
+                  <span
+                    className={`pill ${
+                      instrument.changeBps > 0
+                        ? 'pill-up'
+                        : instrument.changeBps < 0
+                          ? 'pill-down'
+                          : 'pill-flat'
+                    }`}
+                    style={{ fontSize: '11px', padding: '1px 6px' }}
+                  >
+                    {fmtBps(instrument.changeBps)}
+                  </span>
+                ) : null}
+              </span>
             </button>
           );
         })}
@@ -147,7 +164,7 @@ export function Positions({
                       <span className="flex items-center gap-1.5">
                         <span className="truncate">{position.display}</span>
                         {short ? (
-                          <span className="down text-[9.5px] uppercase tracking-wider">Short</span>
+                          <span className="down text-[11px] uppercase tracking-wider">Short</span>
                         ) : null}
                       </span>
                     </td>
@@ -220,18 +237,18 @@ export function OpenOrders({
                       <span className={order.side === 'buy' ? 'up' : 'down'}>
                         <Icon name={order.side === 'buy' ? 'arrow-up' : 'arrow-down'} size={12} />
                       </span>
-                      <span className="text-[12px]">
+                      <span className="text-[13.5px]">
                         {ORDER_TYPE_LABEL[order.type] ?? order.type}
                       </span>
                       {order.reduce_only ? (
-                        <span className="dimmer text-[9.5px] uppercase tracking-wider">Schutz</span>
+                        <span className="dimmer text-[11px] uppercase tracking-wider">Schutz</span>
                       ) : null}
                     </span>
-                    <span className="dimmer block text-[10.5px]">{order.display}</span>
+                    <span className="dimmer block text-[12px]">{order.display}</span>
                   </td>
                   <td className="num r">
                     {fmtQty(order.qty)}
-                    <span className="dimmer block text-[10.5px]">
+                    <span className="dimmer block text-[12px]">
                       {order.limit_price ? `L ${fmtPrice(order.limit_price)}` : ''}
                       {order.stop_price ? ` S ${fmtPrice(order.stop_price)}` : ''}
                       {order.trail_bps ? ` T ${(order.trail_bps / 100).toFixed(1)} %` : ''}
@@ -300,7 +317,7 @@ export function Leaderboard({
               } ${entry.eliminated ? 'opacity-40' : ''}`}
             >
               <span
-                className={`num w-4 shrink-0 text-right text-[11px] ${
+                className={`num w-4 shrink-0 text-right text-[12.5px] ${
                   index === 0 ? 'accent' : 'dimmer'
                 }`}
               >
@@ -316,15 +333,15 @@ export function Leaderboard({
               )}
 
               <span className="min-w-0 flex-1">
-                <span className="block truncate text-[12.5px]">
+                <span className="block truncate text-[14px]">
                   {entry.isBot ? entry.label : entry.username}
                 </span>
-                <span className="dimmer num text-[10.5px]">{entry.trades} Trades</span>
+                <span className="dimmer num text-[12px]">{entry.trades} Trades</span>
               </span>
 
               <span className="text-right">
-                <span className="num block text-[12.5px]">{fmtUsd(entry.equityCents)}</span>
-                <span className={`num block text-[10.5px] ${signClass(bps)}`}>{fmtBps(bps)}</span>
+                <span className="num block text-[14px]">{fmtUsd(entry.equityCents)}</span>
+                <span className={`num block text-[12px] ${signClass(bps)}`}>{fmtBps(bps)}</span>
               </span>
             </button>
           );
@@ -375,14 +392,14 @@ export function OrderBook({
         <span className="normal-case tracking-normal">simuliert</span>
       </div>
 
-      <div className="min-h-0 flex-1 overflow-hidden px-1 py-1 text-[11px]">
+      <div className="min-h-0 flex-1 overflow-hidden px-1 py-1 text-[12.5px]">
         {rows.asks.map((row, index) => (
           <BookRow key={`a${index}`} {...row} max={maxSize} side="ask" digits={digits} />
         ))}
 
         <div className="my-1 flex items-center justify-between border-y border-[var(--color-hairline)] px-1 py-1">
           <span className="num up">{bid ? bid.toFixed(digits) : '—'}</span>
-          <span className="dimmer num text-[10px]">
+          <span className="dimmer num text-[11px]">
             {bid && ask ? `${(((ask - bid) / bid) * 10_000).toFixed(1)} bp` : '—'}
           </span>
           <span className="num down">{ask ? ask.toFixed(digits) : '—'}</span>

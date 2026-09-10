@@ -135,6 +135,8 @@ export interface Instrument {
   bid: string | null;
   ask: string | null;
   last: string | null;
+  /** Veraenderung ueber den geladenen Zeitraum in Basispunkten. */
+  changeBps: number | null;
 }
 
 export interface Position {

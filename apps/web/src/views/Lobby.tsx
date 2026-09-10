@@ -80,7 +80,7 @@ export function Lobby({ me, onRefresh }: { me: Me; onRefresh: () => void }): JSX
   return (
     <div className="mx-auto max-w-[62rem] px-5 pb-20 pt-5">
       <header className="mb-7 flex flex-wrap items-center justify-between gap-3">
-        <div className="num text-[17px] font-semibold tracking-[-0.02em]">
+        <div className="num text-[21px] font-semibold tracking-[-0.02em]">
           TRADE<span className="accent">ARENA</span>
         </div>
 
@@ -179,7 +179,7 @@ function LeagueCard({ league }: { league: LeagueSummary }): JSX.Element {
   const mode = MODES.find((entry) => entry.key === league.mode);
 
   return (
-    <div className="panel p-3 transition hover:border-[var(--color-border)]">
+    <div className="panel card p-3">
       <button onClick={() => navigate(`/l/${league.id}`)} className="block w-full text-left">
         <div className="mb-3 flex items-start justify-between gap-2">
           <div className="flex min-w-0 items-start gap-2.5">
@@ -187,14 +187,14 @@ function LeagueCard({ league }: { league: LeagueSummary }): JSX.Element {
               <Icon name={MODE_ICONS[league.mode] ?? 'candles'} size={15} />
             </span>
             <div className="min-w-0">
-              <div className="truncate text-[13.5px] font-medium">{league.name}</div>
-              <div className="dimmer text-[11px]">
+              <div className="truncate text-[15px] font-medium">{league.name}</div>
+              <div className="dimmer text-[12.5px]">
                 {mode?.name} · {league.members} Spieler
               </div>
             </div>
           </div>
           {league.eliminated ? (
-            <span className="down shrink-0 text-[10px] uppercase tracking-wider">
+            <span className="down shrink-0 text-[11px] uppercase tracking-wider">
               ausgeschieden
             </span>
           ) : null}
@@ -202,10 +202,10 @@ function LeagueCard({ league }: { league: LeagueSummary }): JSX.Element {
 
         <div className="flex items-end justify-between">
           <div>
-            <div className="num text-[17px] font-medium">{fmtUsd(league.equityCents)}</div>
-            <div className={`num text-[11.5px] ${signClass(bps)}`}>{fmtBps(bps)}</div>
+            <div className="num text-[21px] font-medium">{fmtUsd(league.equityCents)}</div>
+            <div className={`num text-[13px] ${signClass(bps)}`}>{fmtBps(bps)}</div>
           </div>
-          <div className="dimmer num flex items-center gap-1 text-[11px]">
+          <div className="dimmer num flex items-center gap-1 text-[12.5px]">
             {league.status === 'running' ? (
               <>
                 <Icon name="clock" size={11} />
@@ -220,7 +220,7 @@ function LeagueCard({ league }: { league: LeagueSummary }): JSX.Element {
 
       {league.status === 'running' ? (
         <div className="mt-3 flex items-center justify-between border-t border-[var(--color-hairline)] pt-2.5">
-          <span className="num dimmer text-[11px] tracking-[0.08em]">{league.inviteCode}</span>
+          <span className="num dimmer text-[12.5px] tracking-[0.08em]">{league.inviteCode}</span>
           <CopyButton
             value={inviteLink(league.inviteCode)}
             label="Einladungslink"
@@ -324,9 +324,9 @@ function CreateLeague({
                 <span className={mode === entry.key ? 'accent' : 'dimmer'}>
                   <Icon name={MODE_ICONS[entry.key] ?? 'candles'} size={14} />
                 </span>
-                <span className="text-[12.5px] font-medium">{entry.name}</span>
+                <span className="text-[14px] font-medium">{entry.name}</span>
               </div>
-              <div className="dimmer mt-1 text-[11px] leading-snug">{entry.blurb}</div>
+              <div className="dimmer mt-1 text-[12.5px] leading-snug">{entry.blurb}</div>
             </button>
           ))}
         </div>

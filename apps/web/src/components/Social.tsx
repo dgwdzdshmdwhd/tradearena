@@ -58,10 +58,10 @@ export function Feed({
                 </span>
 
                 <div className="min-w-0 flex-1">
-                  <div className="text-[12.5px] leading-snug">{described.text}</div>
+                  <div className="text-[14px] leading-snug">{described.text}</div>
 
                   <div className="mt-1 flex items-center gap-2">
-                    <span className="dimmer num text-[10.5px]">{fmtTime(event.createdAt)}</span>
+                    <span className="dimmer num text-[12px]">{fmtTime(event.createdAt)}</span>
 
                     {REACTIONS.map((reaction) => {
                       const count = event.reactions.filter((r) => r.emoji === reaction.key).length;
@@ -75,7 +75,7 @@ export function Feed({
                           key={reaction.key}
                           onClick={() => onReact(event.id, reaction.key)}
                           title={reaction.label}
-                          className={`flex items-center gap-0.5 rounded-[4px] border px-1 py-px text-[10.5px] transition ${
+                          className={`flex items-center gap-0.5 rounded-[4px] border px-1 py-px text-[12px] transition ${
                             mine
                               ? 'border-[var(--color-border)] bg-[var(--color-raised)] text-[var(--color-fg)]'
                               : 'border-transparent text-[var(--color-fg-3)] hover:text-[var(--color-fg-2)]'
@@ -354,15 +354,15 @@ export function Chat({
             <div className="min-w-0 flex-1">
               <div className="flex items-baseline gap-1.5">
                 <span
-                  className={`text-[12px] font-medium ${
+                  className={`text-[13.5px] font-medium ${
                     message.user_id === meUserId ? 'accent' : ''
                   }`}
                 >
                   {message.username}
                 </span>
-                <span className="dimmer num text-[10px]">{fmtTime(message.created_at)}</span>
+                <span className="dimmer num text-[11px]">{fmtTime(message.created_at)}</span>
               </div>
-              <div className="break-words text-[12.5px] leading-snug">{message.body}</div>
+              <div className="break-words text-[14px] leading-snug">{message.body}</div>
             </div>
           </div>
         ))}

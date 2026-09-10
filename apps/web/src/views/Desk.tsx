@@ -70,14 +70,14 @@ export function Desk({ me, onRefresh }: { me: Me; onRefresh: () => void }): JSX.
         </button>
 
         <div className="text-right">
-          <div className="text-[12.5px] font-medium">{me.rank.title}</div>
-          <div className="dimmer num text-[11px]">{prestige} Prestige verfuegbar</div>
+          <div className="text-[14px] font-medium">{me.rank.title}</div>
+          <div className="dimmer num text-[12.5px]">{prestige} Prestige verfuegbar</div>
         </div>
       </header>
 
       <div className="mb-5">
-        <h1 className="text-[17px] font-medium">Trading-Desk</h1>
-        <p className="dim mt-1.5 max-w-[40rem] text-[12.5px] leading-relaxed">
+        <h1 className="text-[21px] font-medium">Trading-Desk</h1>
+        <p className="dim mt-1.5 max-w-[40rem] text-[14px] leading-relaxed">
           Prestige verdienst du mit Platzierungen, Volumen und Achievements. Es laesst sich nicht in
           Spielgeld umwandeln — und in Wettkampf-Ligen wirken Upgrades gar nicht. Dort handeln alle
           zu identischen Konditionen.
@@ -86,7 +86,7 @@ export function Desk({ me, onRefresh }: { me: Me; onRefresh: () => void }): JSX.
 
       {me.nextRank ? (
         <div className="panel mb-6 p-3">
-          <div className="mb-2 flex justify-between text-[11px]">
+          <div className="mb-2 flex justify-between text-[12.5px]">
             <span className="dimmer">naechster Rang · {me.nextRank.title}</span>
             <span className="num dimmer">
               {me.lifetimePrestige} / {me.nextRank.minPrestige}
@@ -129,12 +129,12 @@ export function Desk({ me, onRefresh }: { me: Me; onRefresh: () => void }): JSX.
                       <div key={upgrade.key} className="panel p-3">
                         <div className="mb-2 flex items-start justify-between gap-2">
                           <div className="min-w-0">
-                            <div className="text-[12.5px] font-medium">{upgrade.name}</div>
-                            <p className="dimmer mt-0.5 text-[11px] leading-snug">
+                            <div className="text-[14px] font-medium">{upgrade.name}</div>
+                            <p className="dimmer mt-0.5 text-[12.5px] leading-snug">
                               {upgrade.description}
                             </p>
                           </div>
-                          <span className="num dimmer shrink-0 text-[11px]">
+                          <span className="num dimmer shrink-0 text-[12.5px]">
                             {upgrade.level}/{upgrade.maxLevel}
                           </span>
                         </div>
@@ -193,10 +193,10 @@ export function Desk({ me, onRefresh }: { me: Me; onRefresh: () => void }): JSX.
                   />
                 </span>
                 <div className="min-w-0">
-                  <div className="text-[12.5px] font-medium">{achievement.name}</div>
-                  <p className="dimmer text-[11px] leading-snug">{achievement.description}</p>
+                  <div className="text-[14px] font-medium">{achievement.name}</div>
+                  <p className="dimmer text-[12.5px] leading-snug">{achievement.description}</p>
                   {achievement.prestige > 0 ? (
-                    <div className="num accent mt-1 text-[10.5px]">
+                    <div className="num accent mt-1 text-[12px]">
                       +{achievement.prestige} Prestige
                     </div>
                   ) : null}

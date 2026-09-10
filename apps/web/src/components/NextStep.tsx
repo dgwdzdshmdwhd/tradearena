@@ -109,7 +109,7 @@ export function NextStep({
 
   return (
     <div
-      className="flex items-center gap-2.5 border-b px-3 py-2 text-[12.5px]"
+      className="flex items-center gap-2.5 border-b px-3 py-2 text-[14px]"
       style={{
         borderColor: 'color-mix(in srgb, var(--color-accent) 25%, var(--color-hairline))',
         background: 'color-mix(in srgb, var(--color-accent) 7%, transparent)',

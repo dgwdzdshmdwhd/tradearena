@@ -90,7 +90,10 @@ async function main(): Promise<void> {
   if (existsSync(webRoot)) {
     await app.register(fastifyStatic, {
       root: webRoot,
-      wildcard: false,
+      // Kein `wildcard: false`: damit liest @fastify/static das Verzeichnis
+      // EINMAL beim Start und legt pro Datei eine Route an. Alles, was danach
+      // gebaut wird, existiert fuer den laufenden Prozess nicht mehr - die
+      // Datei liegt auf der Platte, der Server antwortet trotzdem mit 404.
       // Ohne das setzt @fastify/static seinen eigenen Cache-Header und
       // ueberschreibt damit alles, was `setHeaders` gerade gesetzt hat.
       cacheControl: false,

@@ -260,7 +260,7 @@ export function Terminal({ me, leagueId }: { me: Me; leagueId: string }): JSX.El
   if (!league) {
     return (
       <div className="flex h-full items-center justify-center">
-        <span className="dimmer num animate-pulse text-[11px] tracking-[0.2em]">LADE LIGA</span>
+        <span className="dimmer num animate-pulse text-[12.5px] tracking-[0.2em]">LADE LIGA</span>
       </div>
     );
   }
@@ -309,111 +309,130 @@ export function Terminal({ me, leagueId }: { me: Me; leagueId: string }): JSX.El
 
   return (
     <div className="flex h-full flex-col">
-      <header className="flex flex-wrap items-center gap-x-5 gap-y-2 border-b border-[var(--color-hairline)] px-3 py-2">
-        <button className="btn btn-ghost btn-sm px-1.5" onClick={() => navigate('/')} title="Lobby">
-          <Icon name="arrow-left" size={14} />
-        </button>
+      {/*
+        Der Kopf ist die Hauptfigur: der Kontostand gross, alles andere klein.
+        Vorher standen hier sieben gleich grosse Kleinigkeiten nebeneinander -
+        das liest niemand, und es fuehlt sich nach Werkzeug an, nicht nach Spiel.
+      */}
+      <header className="border-b border-[var(--color-hairline)] px-4 py-3">
+        <div className="flex flex-wrap items-center gap-x-7 gap-y-3">
+          <button
+            className="btn btn-ghost btn-sm px-2"
+            onClick={() => navigate('/')}
+            title="Zur Lobby"
+          >
+            <Icon name="arrow-left" size={15} />
+          </button>
 
-        <div className="flex min-w-0 items-center gap-2">
-          <span className="dimmer">
-            <Icon name={MODE_ICONS[league.mode] ?? 'candles'} size={14} />
-          </span>
-          <div className="min-w-0">
-            <div className="truncate text-[13px] font-medium leading-tight">{league.name}</div>
-            <div className="dimmer text-[10.5px] leading-tight">
-              {MODE_LABELS[league.mode] ?? league.mode}
-              {league.scenarioName && league.status === 'finished' ? ` · ${league.scenarioName}` : ''}
-              {league.maxLeverage > 1 ? ` · ${league.maxLeverage}× Hebel` : ''}
+          <div className="flex min-w-0 items-center gap-2.5">
+            <span className="dimmer">
+              <Icon name={MODE_ICONS[league.mode] ?? 'candles'} size={16} />
+            </span>
+            <div className="min-w-0">
+              <div className="truncate text-[17px] font-semibold leading-tight tracking-[-0.01em]">
+                {league.name}
+              </div>
+              <div className="dimmer text-[12.5px] leading-tight">
+                {MODE_LABELS[league.mode] ?? league.mode}
+                {league.status === 'running' && league.mode !== 'timemachine'
+                  ? ` · noch ${fmtCountdown(league.endsAt)}`
+                  : ''}
+                {league.status === 'finished' ? ' · beendet' : ''}
+                {league.maxLeverage > 1 ? ` · ${league.maxLeverage}× Hebel` : ''}
+              </div>
             </div>
+          </div>
+
+          <div className="flex items-end gap-3">
+            <div>
+              <div className="stat-label mb-1">Kontostand</div>
+              <div className="hero text-[30px]">{fmtUsd(equity)}</div>
+            </div>
+            <span
+              className={`pill mb-1 ${bps > 0 ? 'pill-up' : bps < 0 ? 'pill-down' : 'pill-flat'}`}
+            >
+              {fmtBps(bps)}
+            </span>
+          </div>
+
+          <div className="ml-auto flex items-center gap-2.5">
+            <button
+              className="hidden w-[10rem] text-left sm:block"
+              onClick={() => navigate('/desk')}
+              title={
+                desk.next
+                  ? `${desk.lifetime} von ${desk.next.minPrestige} Prestige bis ${desk.next.title}`
+                  : 'Trading-Desk'
+              }
+            >
+              <div className="mb-1.5 flex items-baseline justify-between">
+                <span className="stat-label">{desk.rank}</span>
+                <span className="num accent text-[13px] font-semibold">{desk.prestige}</span>
+              </div>
+              <div className="meter meter-gold">
+                <i
+                  style={{
+                    width: desk.next
+                      ? `${Math.min(100, Math.round((desk.lifetime / desk.next.minPrestige) * 100))}%`
+                      : '100%',
+                  }}
+                />
+              </div>
+            </button>
+
+            {league.status === 'running' ? (
+              <CopyButton
+                value={inviteLink(league.inviteCode)}
+                label="Einladen"
+                icon="link"
+                className="btn btn-ghost btn-sm"
+              />
+            ) : null}
+
+            <button
+              className="btn btn-ghost btn-sm"
+              title={simple ? 'Alle Werkzeuge einblenden' : 'Zurueck zur einfachen Ansicht'}
+              onClick={() => {
+                const next = !simple;
+                setSimple(next);
+                localStorage.setItem('ta_pro', next ? '0' : '1');
+              }}
+            >
+              {simple ? 'Pro' : 'Einfach'}
+            </button>
+
+            <button
+              className="btn btn-ghost btn-sm px-2"
+              title={soundOn ? 'Ton aus' : 'Ton an'}
+              onClick={async () => {
+                const next = !soundOn;
+                setSoundOn(next);
+                setSoundEnabled(next);
+                await api.patch('/api/me', { soundEnabled: next });
+              }}
+            >
+              <Icon name={soundOn ? 'volume-on' : 'volume-off'} size={15} />
+            </button>
+
+            {league.ownerId === me.user.id && league.status === 'running' ? (
+              <button className="btn btn-ghost btn-sm" onClick={() => void finishLeague()}>
+                beenden
+              </button>
+            ) : null}
           </div>
         </div>
 
-        {league.status === 'running' ? (
-          <CopyButton
-            value={inviteLink(league.inviteCode)}
-            label={league.inviteCode}
-            icon="link"
-            className="btn btn-ghost btn-sm num"
-          />
-        ) : null}
-
-        <div className="ml-auto flex items-center gap-4">
+        <div className="mt-2 flex items-center gap-4">
           <Status tone={feedStatus === 'live' ? 'live' : 'warn'}>
-            {feedStatus === 'live' ? 'Kurse live' : 'Simulator'}
+            {feedStatus === 'live' ? 'Kurse live von der Boerse' : 'Ersatzkurse - Boerse nicht erreichbar'}
           </Status>
-
-          <div className="text-right">
-            <div className="stat-label">
-              {league.status === 'running'
-                ? league.mode === 'timemachine'
-                  ? 'laeuft'
-                  : 'verbleibend'
-                : 'beendet'}
-            </div>
-            <div className="num text-[11.5px]">
-              {league.status === 'running'
-                ? league.mode === 'timemachine'
-                  ? '—'
-                  : fmtCountdown(league.endsAt)
-                : '—'}
-            </div>
-          </div>
-
-          <div className="text-right">
-            <div className="num text-[15px] font-medium leading-tight">{fmtUsd(equity)}</div>
-            <div className={`num text-[11px] leading-tight ${signClass(bps)}`}>{fmtBps(bps)}</div>
-          </div>
-
-          <button
-            className="btn btn-ghost btn-sm"
-            title={simple ? 'Alle Werkzeuge einblenden' : 'Auf die einfache Ansicht zurueck'}
-            onClick={() => {
-              const next = !simple;
-              setSimple(next);
-              localStorage.setItem('ta_pro', next ? '0' : '1');
-            }}
-          >
-            {simple ? 'Pro' : 'Einfach'}
-          </button>
-
-          <button
-            className="btn btn-ghost btn-sm"
-            onClick={() => navigate('/desk')}
-            title={
-              desk.next
-                ? `${desk.lifetime} von ${desk.next.minPrestige} Prestige bis ${desk.next.title}`
-                : 'Trading-Desk'
-            }
-          >
-            <Icon name="sliders" size={13} />
-            <span className="hidden xl:inline">{desk.rank}</span>
-            <span className="num accent">{desk.prestige}</span>
-          </button>
-
-          <button
-            className="btn btn-ghost btn-sm px-1.5"
-            title={soundOn ? 'Ton aus' : 'Ton an'}
-            onClick={async () => {
-              const next = !soundOn;
-              setSoundOn(next);
-              setSoundEnabled(next);
-              await api.patch('/api/me', { soundEnabled: next });
-            }}
-          >
-            <Icon name={soundOn ? 'volume-on' : 'volume-off'} size={14} />
-          </button>
-
-          {league.ownerId === me.user.id && league.status === 'running' ? (
-            <button className="btn btn-ghost btn-sm" onClick={() => void finishLeague()}>
-              beenden
-            </button>
-          ) : null}
+          <span className="num dimmer text-[12px] tracking-[0.08em]">{league.inviteCode}</span>
         </div>
       </header>
 
       {marginWarning ? (
         <div
-          className="down flex items-center justify-center gap-2 border-b px-3 py-1.5 text-[11.5px]"
+          className="down flex items-center justify-center gap-2 border-b px-3 py-1.5 text-[13px]"
           style={{
             borderColor: 'color-mix(in srgb, var(--color-down) 40%, transparent)',
             background: 'color-mix(in srgb, var(--color-down) 10%, transparent)',
@@ -438,7 +457,7 @@ export function Terminal({ me, leagueId }: { me: Me; leagueId: string }): JSX.El
       />
 
       {league.status === 'finished' && league.reveal ? (
-        <div className="flex items-center justify-center gap-2 border-b border-[var(--color-hairline)] bg-[var(--color-raised)] px-3 py-1.5 text-[11.5px]">
+        <div className="flex items-center justify-center gap-2 border-b border-[var(--color-hairline)] bg-[var(--color-raised)] px-3 py-1.5 text-[13px]">
           <span className="accent">
             <Icon name="flag" size={13} />
           </span>
@@ -597,7 +616,7 @@ export function Terminal({ me, leagueId }: { me: Me; leagueId: string }): JSX.El
             <button
               key={key}
               onClick={() => setMobileTab(key)}
-              className={`flex flex-col items-center gap-1 rounded-[var(--radius)] py-1.5 text-[10.5px] transition ${
+              className={`flex flex-col items-center gap-1 rounded-[var(--radius)] py-1.5 text-[12px] transition ${
                 mobileTab === key
                   ? 'bg-[var(--color-raised)] text-[var(--color-fg)]'
                   : 'text-[var(--color-fg-3)]'

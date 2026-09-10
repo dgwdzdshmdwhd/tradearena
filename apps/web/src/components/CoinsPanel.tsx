@@ -164,24 +164,24 @@ function CoinCard({
           <CoinMark ticker={coin.ticker} color={coin.color} size={26} />
           <div className="min-w-0">
             <div className="flex items-center gap-1.5">
-              <b className="num text-[12.5px] font-medium">{coin.ticker}</b>
+              <b className="num text-[14px] font-medium">{coin.ticker}</b>
               {dead ? (
-                <span className="down text-[9.5px] uppercase tracking-wider">gerugged</span>
+                <span className="down text-[11px] uppercase tracking-wider">gerugged</span>
               ) : null}
             </div>
-            <div className="dimmer truncate text-[10.5px]">
+            <div className="dimmer truncate text-[12px]">
               {coin.name} · {coin.creatorName} · {coin.holders} Halter
             </div>
           </div>
         </div>
 
         <div className="text-right">
-          <div className="num text-[12.5px]">{fmtPrice(coin.priceCents)} $</div>
-          <div className="dimmer num text-[10.5px]">MC {fmtUsd(coin.marketCapCents)}</div>
+          <div className="num text-[14px]">{fmtPrice(coin.priceCents)} $</div>
+          <div className="dimmer num text-[12px]">MC {fmtUsd(coin.marketCapCents)}</div>
         </div>
       </div>
 
-      <div className="mt-2 grid grid-cols-2 gap-x-3 gap-y-0.5 text-[10.5px]">
+      <div className="mt-2 grid grid-cols-2 gap-x-3 gap-y-0.5 text-[12px]">
         <Row label="Liquiditaet" value={fmtUsd(coin.reserveUsdCents)} />
         <Row label="Gebuehr" value={`${(coin.feeBps / 100).toFixed(2)} %`} />
         <Row
@@ -195,7 +195,7 @@ function CoinCard({
       {!dead ? <RiskBar score={coin.risk.score} locked={coin.risk.locked} /> : null}
 
       {Number(coin.myQty) > 0 ? (
-        <div className="dimmer mt-1.5 text-[10.5px]">
+        <div className="dimmer mt-1.5 text-[12px]">
           Du haelst <span className="num">{fmtQty(coin.myQty)}</span>
         </div>
       ) : null}
@@ -236,7 +236,7 @@ function RiskBar({ score, locked }: { score: number; locked: boolean }): JSX.Ele
 
   return (
     <div className="mt-2">
-      <div className="mb-1 flex justify-between text-[10px]">
+      <div className="mb-1 flex justify-between text-[11px]">
         <span className="dimmer">Risiko</span>
         <span style={{ color }}>{label}</span>
       </div>
@@ -373,7 +373,7 @@ function CreateCoin({
           </Field>
         </div>
 
-        <div className="rounded-[var(--radius)] border border-[var(--color-hairline)] bg-[var(--color-bg)] p-2 text-[11px]">
+        <div className="rounded-[var(--radius)] border border-[var(--color-hairline)] bg-[var(--color-bg)] p-2 text-[12.5px]">
           <Row label="Startkurs" value={`${startPrice.toPrecision(3)} $`} />
           <Row label="Listing-Gebuehr" value="500,00 $" />
           <Row
@@ -382,7 +382,7 @@ function CreateCoin({
           />
         </div>
 
-        <p className="dimmer text-[11px] leading-relaxed">
+        <p className="dimmer text-[12.5px] leading-relaxed">
           Deine Liquiditaet landet im Pool und bestimmt den Startkurs. Ohne Sperre kannst du sie
           jederzeit wieder abziehen — der Kurs bricht dann zusammen. Alle sehen vorher, wie hoch
           dein Anteil ist und ob gesperrt wurde.

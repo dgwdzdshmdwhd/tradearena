@@ -137,7 +137,7 @@ export function App(): JSX.Element {
   if (loading) {
     return (
       <div className="flex h-full items-center justify-center">
-        <div className="num dimmer animate-pulse text-[11px] tracking-[0.3em]">TRADEARENA</div>
+        <div className="num dimmer animate-pulse text-[12.5px] tracking-[0.3em]">TRADEARENA</div>
       </div>
     );
   }

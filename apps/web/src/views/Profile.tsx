@@ -42,7 +42,7 @@ export function Profile({ userId }: { userId: string }): JSX.Element {
   if (!data) {
     return (
       <div className="flex h-full items-center justify-center">
-        <span className="dimmer num animate-pulse text-[11px] tracking-[0.2em]">LADE PROFIL</span>
+        <span className="dimmer num animate-pulse text-[12.5px] tracking-[0.2em]">LADE PROFIL</span>
       </div>
     );
   }
@@ -61,11 +61,11 @@ export function Profile({ userId }: { userId: string }): JSX.Element {
       <div className="panel mb-3 flex flex-wrap items-center gap-4 p-4">
         <Avatar name={data.user.username} id={data.user.id} size={46} />
         <div className="min-w-0 flex-1">
-          <div className="text-[17px] font-medium">{data.user.username}</div>
-          <div className="dim text-[12.5px]">
+          <div className="text-[21px] font-medium">{data.user.username}</div>
+          <div className="dim text-[14px]">
             {data.rank.title} · {data.lifetimePrestige} Prestige insgesamt
           </div>
-          <div className="dimmer mt-0.5 text-[11px]">dabei seit {fmtDateTime(data.user.createdAt)}</div>
+          <div className="dimmer mt-0.5 text-[12.5px]">dabei seit {fmtDateTime(data.user.createdAt)}</div>
         </div>
 
         <div className="flex gap-6">
@@ -87,7 +87,7 @@ export function Profile({ userId }: { userId: string }): JSX.Element {
                 <span
                   key={entry.key}
                   title={definition?.description}
-                  className="down flex items-center gap-1.5 rounded-[var(--radius)] border px-2 py-1 text-[11.5px]"
+                  className="down flex items-center gap-1.5 rounded-[var(--radius)] border px-2 py-1 text-[13px]"
                   style={{ borderColor: 'color-mix(in srgb, var(--color-down) 35%, transparent)' }}
                 >
                   <Icon name={ACHIEVEMENT_ICONS[entry.key] ?? 'medal'} size={12} />
@@ -111,7 +111,7 @@ export function Profile({ userId }: { userId: string }): JSX.Element {
                 <span
                   key={entry.key}
                   title={`${definition?.description ?? ''} · ${fmtDateTime(entry.unlockedAt)}`}
-                  className="flex items-center gap-1.5 rounded-[var(--radius)] border border-[var(--color-hairline)] px-2 py-1 text-[11.5px]"
+                  className="flex items-center gap-1.5 rounded-[var(--radius)] border border-[var(--color-hairline)] px-2 py-1 text-[13px]"
                 >
                   <span className="accent">
                     <Icon name={ACHIEVEMENT_ICONS[entry.key] ?? 'medal'} size={12} />
@@ -135,14 +135,14 @@ export function Profile({ userId }: { userId: string }): JSX.Element {
               className="flex w-full items-center justify-between border-t border-[var(--color-hairline)] py-2 text-left first:border-0"
             >
               <div>
-                <div className="text-[12.5px]">{league.name}</div>
-                <div className="dimmer text-[10.5px]">
+                <div className="text-[14px]">{league.name}</div>
+                <div className="dimmer text-[12px]">
                   {league.status === 'running' ? 'laeuft' : 'beendet'}
                 </div>
               </div>
               <div className="text-right">
-                <div className="num text-[12.5px]">{fmtUsd(league.equity)}</div>
-                <div className={`num text-[10.5px] ${signClass(bps)}`}>{fmtBps(bps)}</div>
+                <div className="num text-[14px]">{fmtUsd(league.equity)}</div>
+                <div className={`num text-[12px] ${signClass(bps)}`}>{fmtBps(bps)}</div>
               </div>
             </button>
           );

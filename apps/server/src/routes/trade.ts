@@ -63,6 +63,24 @@ export function registerTradeRoutes(app: FastifyInstance, ctx: Context): void {
       }
 
       const quote = await ctx.trading.quoteFor(instrument, league);
+
+      // Die Veraenderung ueber den geladenen Zeitraum. Eine Prozentzahl neben
+      // dem Kurs sagt auf einen Blick mehr als der Kurs selbst - ohne sie
+      // muss man erst wissen, was fuer dieses Papier viel oder wenig ist.
+      const candles =
+        league.mode === 'timemachine'
+          ? ctx.replay.candlesUpTo(league.id, instrument.symbol, league.replayCursor ?? 0)
+          : instrument.kind === 'crypto'
+            ? ctx.feed.candles(instrument.symbol)
+            : [];
+
+      const first = candles[0]?.c;
+      const latest = candles[candles.length - 1]?.c;
+      const changeBps =
+        candles.length > 2 && first && latest && first > 0
+          ? Math.round(((latest - first) / first) * 10_000)
+          : null;
+
       out.push({
         id: instrument.id,
         symbol: instrument.symbol,
@@ -74,6 +92,7 @@ export function registerTradeRoutes(app: FastifyInstance, ctx: Context): void {
         bid: quote?.bid.toString() ?? null,
         ask: quote?.ask.toString() ?? null,
         last: quote?.last.toString() ?? null,
+        changeBps,
       });
     }
 
