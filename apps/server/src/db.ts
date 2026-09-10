@@ -286,7 +286,7 @@ const SCHEMA: string[] = [
     creator_account_id TEXT NOT NULL,
     name TEXT NOT NULL,
     ticker TEXT NOT NULL,
-    emoji TEXT NOT NULL DEFAULT '🪙',
+    emoji TEXT NOT NULL DEFAULT '',
     color TEXT NOT NULL DEFAULT '#f7c948',
     description TEXT NOT NULL DEFAULT '',
     total_supply TEXT NOT NULL,
@@ -298,7 +298,10 @@ const SCHEMA: string[] = [
     status TEXT NOT NULL DEFAULT 'live',
     created_at BIGINT NOT NULL,
     rugged_at BIGINT,
-    rugged_amount TEXT
+    rugged_amount TEXT,
+    pull_at BIGINT,
+    pull_account_id TEXT,
+    pull_pct INTEGER
   )`,
 
   `CREATE TABLE IF NOT EXISTS lp_shares (
@@ -523,6 +526,9 @@ const SCHEMA: string[] = [
  */
 const MIGRATIONS: string[] = [
   `ALTER TABLE leagues ADD COLUMN market TEXT NOT NULL DEFAULT 'arena'`,
+  `ALTER TABLE coins ADD COLUMN pull_at BIGINT`,
+  `ALTER TABLE coins ADD COLUMN pull_account_id TEXT`,
+  `ALTER TABLE coins ADD COLUMN pull_pct INTEGER`,
 ];
 
 async function migrate(db: Db): Promise<void> {

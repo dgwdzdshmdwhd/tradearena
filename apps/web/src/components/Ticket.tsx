@@ -212,7 +212,7 @@ export function Ticket({
           </div>
         ) : null}
 
-        <div>
+        <div data-tour="amount">
           <div className="mb-1 flex items-center justify-between">
             <span className="label mb-0">{useNotional ? 'Betrag ($)' : 'Menge'}</span>
             <button
@@ -348,6 +348,7 @@ export function Ticket({
         ) : null}
 
         <button
+          data-tour="buy"
           className={`btn w-full ${side === 'buy' ? 'btn-buy' : 'btn-sell'} ${
             simple ? 'btn-lg' : ''
           }`}

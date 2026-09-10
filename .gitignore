@@ -18,3 +18,8 @@ Thumbs.db
 .vercel
 .turbo
 *.tsbuildinfo
+
+# Lokale SQLite-Datenbank: enthaelt echte Spielstaende, gehoert nicht ins Repo
+*.db
+*.db-shm
+*.db-wal

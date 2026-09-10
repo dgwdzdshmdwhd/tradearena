@@ -135,6 +135,15 @@ export function prestigeForTrade(grossCents: Cents, realizedCents: Cents): numbe
   return Math.max(0, volume) + bonus;
 }
 
+/**
+ * Vorwarnzeit beim Abziehen von Liquiditaet.
+ *
+ * Zehn Sekunden sind kurz genug, dass man wirklich hetzen muss, und lang
+ * genug, dass Aufmerksamkeit belohnt wird. Bei drei Sekunden waere es
+ * Gluecksspiel, bei dreissig ein gemuetlicher Spaziergang.
+ */
+export const PULL_DELAY_MS = 10_000;
+
 export class Trading {
   constructor(
     readonly db: Db,
@@ -1201,7 +1210,7 @@ export class Trading {
             account.id,
             name,
             ticker,
-            trimText(input.emoji, 4) || '🪙',
+            trimText(input.emoji, 4),
             trimText(input.color, 9) || '#f7c948',
             trimText(input.description, 140),
             supply.toString(),
@@ -1239,11 +1248,28 @@ export class Trading {
         );
 
         await this.unlockEvent(account.userId, { kind: 'coin_created' }, league.id, at);
+
+        // Ein neuer Coin ist ein Ereignis fuer die ganze Liga, kein
+        // Tagebucheintrag. Deshalb geht er allen auf den Bildschirm.
+        const creator = await this.db.get<{ username: string }>(
+          'SELECT username FROM users WHERE id = ?',
+          [userId],
+        );
+        this.hub.broadcastLeague(league.id, 'coin_launch', {
+          instrumentId,
+          ticker,
+          name,
+          color: trimText(input.color, 9) || '#d4a24c',
+          by: creator?.username ?? '?',
+          liquidityCents: liquidity.toString(),
+          locked: lockMinutes > 0,
+        });
+
         await this.pushFeed(league, account.id, 'coin_launch', {
           instrumentId,
           ticker,
           name,
-          emoji: trimText(input.emoji, 4) || '🪙',
+          emoji: trimText(input.emoji, 4),
           liquidityCents: liquidity.toString(),
           lockUntil: lockMinutes > 0 ? at + lockMinutes * 60_000 : null,
         });
@@ -1254,26 +1280,36 @@ export class Trading {
   }
 
   /**
-   * Liquiditaet abziehen - der Rugpull.
+   * Abzug ankuendigen.
    *
-   * Technisch passiert nichts Besonderes: der Liquiditaetsgeber nimmt seinen
-   * Anteil an beiden Reserven mit. Weil die USD-Reserve schrumpft, faellt der
-   * Kurs fuer alle anderen ins Bodenlose. Es entsteht kein Geld - es wird nur
-   * umverteilt, und zwar von den Kaeufern zum Ersteller.
+   * Der Rugpull passiert NICHT sofort. Er wird zehn Sekunden vorher allen
+   * angekuendigt - und genau darin liegt das Spiel:
+   *
+   *   Fuer den Abziehenden: Der Zeitpunkt entscheidet. Wer zieht, waehrend
+   *   alle zuschauen, findet einen leergeraeumten Pool vor. Wer wartet, bis
+   *   viel Geld drin ist, riskiert, dass jemand misstrauisch wird.
+   *
+   *   Fuer die Halter: Zehn Sekunden, um zu verkaufen. Wer den Feed liest,
+   *   kommt raus. Wer nicht hinschaut, ist der Dumme.
+   *
+   * Ohne diese Vorwarnung waere ein Rugpull ein Knopfdruck ohne Gegenspiel -
+   * und damit weder spannend noch verlierbar.
    */
-  async removeLiquidity(
+  async announcePull(
     userId: string,
     instrumentId: string,
     sharePct: number,
-  ): Promise<{ usdCents: string; priceBefore: string; priceAfter: string; rugged: boolean }> {
+  ): Promise<{ pullAt: number; seconds: number }> {
     return this.lock.run(() =>
       this.db.tx(async () => {
         const coin = await this.coin(instrumentId);
         if (!coin) throw notFound('Coin nicht gefunden.');
         if (coin.status !== 'live') throw badRequest('Dieser Coin ist bereits tot.');
+        if (coin.pull_at) throw badRequest('Der Abzug laeuft bereits.');
 
         const league = await this.league(coin.league_id);
         const account = await this.accountFor(league.id, userId);
+        const at = now();
 
         const holding = await this.db.get<{ shares: string }>(
           'SELECT shares FROM lp_shares WHERE coin_id = ? AND account_id = ?',
@@ -1282,8 +1318,6 @@ export class Trading {
         if (!holding || big(holding.shares) <= 0n) {
           throw badRequest('Du haelst keine Liquiditaet in diesem Coin.');
         }
-
-        const at = now();
         if (league.rugpullMode === 'off') {
           throw badRequest('In dieser Liga ist das Abziehen von Liquiditaet abgeschaltet.');
         }
@@ -1292,6 +1326,78 @@ export class Trading {
           throw badRequest(`Die Liquiditaet ist noch ${minutes} Minuten gesperrt.`);
         }
 
+        const pct = Math.min(100, Math.max(1, Math.round(sharePct)));
+        const pullAt = at + PULL_DELAY_MS;
+
+        await this.db.run(
+          'UPDATE coins SET pull_at = ?, pull_account_id = ?, pull_pct = ? WHERE instrument_id = ?',
+          [pullAt, account.id, pct, instrumentId],
+        );
+
+        const user = await this.db.get<{ username: string }>(
+          'SELECT username FROM users WHERE id = ?',
+          [userId],
+        );
+
+        // Vollbild bei allen, die gerade zuschauen. Wer den Bildschirm nicht
+        // ansieht, hat Pech - das ist Teil des Spiels.
+        this.hub.broadcastLeague(league.id, 'pull_warning', {
+          instrumentId,
+          ticker: coin.ticker,
+          name: coin.name,
+          color: coin.color,
+          by: user?.username ?? '?',
+          pct,
+          pullAt,
+          seconds: Math.round(PULL_DELAY_MS / 1000),
+        });
+
+        await this.pushFeed(league, account.id, 'pull_warning', {
+          instrumentId,
+          ticker: coin.ticker,
+          pct,
+          seconds: Math.round(PULL_DELAY_MS / 1000),
+        });
+
+        return { pullAt, seconds: Math.round(PULL_DELAY_MS / 1000) };
+      }),
+    );
+  }
+
+  /**
+   * Den angekuendigten Abzug ausfuehren.
+   *
+   * Wird von der Engine aufgerufen, sobald der Countdown abgelaufen ist. Was
+   * jetzt noch im Pool liegt, bekommt der Abziehende - nicht mehr. Haben die
+   * Halter in der Zwischenzeit verkauft, ist die USD-Reserve weg und der
+   * ganze Aufwand hat sich nicht gelohnt.
+   */
+  async executePull(
+    instrumentId: string,
+  ): Promise<{ usdCents: string; priceBefore: string; priceAfter: string; rugged: boolean } | null> {
+    return this.lock.run(() =>
+      this.db.tx(async () => {
+        const coin = await this.coin(instrumentId);
+        if (!coin || coin.status !== 'live' || !coin.pull_at || !coin.pull_account_id) return null;
+
+        const league = await this.league(coin.league_id);
+        const account = await this.accountById(coin.pull_account_id);
+        const at = now();
+
+        const holding = await this.db.get<{ shares: string }>(
+          'SELECT shares FROM lp_shares WHERE coin_id = ? AND account_id = ?',
+          [instrumentId, account.id],
+        );
+
+        if (!holding || big(holding.shares) <= 0n) {
+          await this.db.run(
+            'UPDATE coins SET pull_at = NULL, pull_account_id = NULL, pull_pct = NULL WHERE instrument_id = ?',
+            [instrumentId],
+          );
+          return null;
+        }
+
+        const sharePct = int(coin.pull_pct, 100);
         const pool = toPool(coin);
         const priceBefore = poolPrice(pool);
 
@@ -1309,7 +1415,8 @@ export class Trading {
 
         await this.db.run(
           `UPDATE coins SET reserve_usd = ?, reserve_tokens = ?, lp_shares = ?, status = ?,
-                            rugged_at = ?, rugged_amount = ?
+                            rugged_at = ?, rugged_amount = ?,
+                            pull_at = NULL, pull_account_id = NULL, pull_pct = NULL
            WHERE instrument_id = ?`,
           [
             result.pool.reserveUsdCents.toString(),

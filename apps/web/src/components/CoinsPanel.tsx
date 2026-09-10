@@ -1,6 +1,7 @@
 import { useState } from 'react';
 
 import { ApiError, api, type Coin, type LeagueDetail } from '../lib/api.js';
+import { askConfirm } from '../lib/confirm.js';
 import { fmtCountdown, fmtPrice, fmtQty, fmtUsd, toCents, toQty } from '../lib/format.js';
 import { sounds } from '../lib/sound.js';
 import { pushToast } from '../lib/toast.js';
@@ -105,24 +106,28 @@ function CoinCard({
   const canPull = coin.isMine && Number(coin.myShares) > 0 && !dead && league.rugpullMode !== 'off';
 
   const pull = async (): Promise<void> => {
-    const confirmed = window.confirm(
-      `Liquiditaet aus ${coin.ticker} abziehen?\n\n` +
-        `Der Kurs bricht sofort zusammen. ${coin.holders} Spieler halten diesen Coin.\n` +
-        `Das Abzeichen "Rugger" bleibt dauerhaft an deinem Profil.`,
-    );
+    const confirmed = await askConfirm({
+      title: `Abzug aus ${coin.ticker} ankuendigen?`,
+      body: [
+        'Es passiert nicht sofort: Alle sehen zehn Sekunden lang einen Countdown auf dem Bildschirm und koennen in der Zeit verkaufen.',
+        `Was dann noch im Pool liegt, bekommst du. Aktuell sind das ${fmtUsd(coin.reserveUsdCents)} bei ${coin.holders} Haltern.`,
+        'Abbrechen geht danach nicht mehr.',
+      ],
+      confirmLabel: 'Ankuendigen',
+      tone: 'danger',
+      icon: 'scissors',
+    });
     if (!confirmed) return;
 
     setBusy(true);
     try {
-      const result = await api.post<{ usdCents: string; rugged: boolean }>(
-        `/api/coins/${coin.instrumentId}/rug`,
-      );
+      const result = await api.post<{ seconds: number }>(`/api/coins/${coin.instrumentId}/rug`);
       sounds.rug();
       pushToast({
         kind: 'danger',
         icon: 'scissors',
-        title: result.rugged ? 'Liquiditaet abgezogen' : 'Anteil entnommen',
-        body: `${fmtUsd(result.usdCents)} auf dein Konto.`,
+        title: 'Abzug angekuendigt',
+        body: `In ${result.seconds} Sekunden. Alle wissen jetzt Bescheid.`,
       });
       onChanged();
     } catch (error) {
@@ -220,7 +225,7 @@ function CoinCard({
             title={locked ? 'Liquiditaet ist noch gesperrt' : 'Liquiditaet abziehen'}
           >
             <Icon name="scissors" size={11} />
-            {locked ? 'gesperrt' : 'abziehen'}
+            {locked ? 'gesperrt' : 'Abzug ankuendigen'}
           </button>
         ) : null}
       </div>

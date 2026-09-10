@@ -30,12 +30,17 @@ import {
 import { assertMember } from './leagues.js';
 
 /**
- * Erst nach so vielen Trades bekommt man seinen ersten Bot.
+ * Was ein Bot kostet - in Spielgeld, nicht in Wartezeit.
  *
- * Bewusst niedrig: der Bot ist das spielerischste am ganzen Ding, und wer ihn
- * an einem Abend nie zu sehen bekommt, verpasst die Haelfte.
+ * Vorher musste man ihn sich mit Trades verdienen. Kaufen ist die bessere
+ * Mechanik: die Entscheidung faellt sofort und sie tut weh. 5.000 $ sind bei
+ * 100.000 $ Startkapital ein spuerbarer Batzen, den man nicht mehr selbst
+ * anlegen kann. Jeder weitere Bot kostet das Doppelte - sonst stellt der
+ * Erste, der Geld hat, einfach fuenf davon ein.
  */
-const TRADES_FOR_FIRST_BOT = 5;
+export function botPriceCents(vorhandene: number): bigint {
+  return 500_000n * BigInt(2 ** Math.min(4, vorhandene));
+}
 
 export function registerTradeRoutes(app: FastifyInstance, ctx: Context): void {
   // --- Marktdaten ---------------------------------------------------------
@@ -398,7 +403,7 @@ export function registerTradeRoutes(app: FastifyInstance, ctx: Context): void {
       leagueId: id,
       name: String(body.name ?? ''),
       ticker: String(body.ticker ?? ''),
-      emoji: String(body.emoji ?? '🪙'),
+      emoji: String(body.emoji ?? ''),
       color: String(body.color ?? '#f7c948'),
       description: String(body.description ?? ''),
       supply: String(body.supply ?? '0'),
@@ -422,7 +427,9 @@ export function registerTradeRoutes(app: FastifyInstance, ctx: Context): void {
     const { id } = request.params as { id: string };
     const body = request.body as { sharePct?: number };
 
-    return ctx.trading.removeLiquidity(userId, id, int(body.sharePct, 100));
+    // Kuendigt den Abzug an. Ausgefuehrt wird er zehn Sekunden spaeter von
+    // der Engine - solange koennen die Halter noch raus.
+    return ctx.trading.announcePull(userId, id, int(body.sharePct, 100));
   });
 
   // --- Bots ---------------------------------------------------------------
@@ -445,7 +452,7 @@ export function registerTradeRoutes(app: FastifyInstance, ctx: Context): void {
       [id, userId],
     );
 
-    const withDecisions = [];
+    const withDecisions: Array<Record<string, unknown>> = [];
     for (const bot of bots) {
       const decisions = await ctx.db.all<Record<string, unknown>>(
         'SELECT * FROM bot_decisions WHERE bot_id = ? ORDER BY at DESC LIMIT 12',
@@ -454,9 +461,13 @@ export function registerTradeRoutes(app: FastifyInstance, ctx: Context): void {
       withDecisions.push({ ...bot, decisions });
     }
 
+    const aktive = withDecisions.filter((bot) => String(bot.status) !== 'fired').length;
+
     return {
       bots: withDecisions,
       slots,
+      // Was der naechste Bot kostet - der Preis verdoppelt sich mit jedem.
+      nextPriceCents: botPriceCents(aktive).toString(),
       botsAllowed: league.botsAllowed,
       strategies: Object.entries(STRATEGY_LABELS).map(([key, label]) => ({
         key,
@@ -476,19 +487,16 @@ export function registerTradeRoutes(app: FastifyInstance, ctx: Context): void {
     if (!league.botsAllowed) throw badRequest('In dieser Liga sind Bots abgeschaltet.');
 
     const slots = await botSlots(ctx, userId);
-    if (!slots.unlocked) {
-      throw forbidden(
-        `Deinen ersten Bot bekommst du nach ${TRADES_FOR_FIRST_BOT} Trades. Noch ${slots.tradesNeeded} zu gehen.`,
-      );
-    }
 
     const existing = await ctx.db.all<{ id: string }>(
-      'SELECT id FROM bots WHERE league_id = ? AND user_id = ?',
+      "SELECT id FROM bots WHERE league_id = ? AND user_id = ? AND status <> 'fired'",
       [id, userId],
     );
     if (existing.length >= slots.slots) {
       throw forbidden('Alle Bot-Plaetze belegt. Neue Plaetze gibt es im Trading-Desk.');
     }
+
+    const price = botPriceCents(existing.length);
 
     const strategy = (Object.keys(DEFAULT_BOT_PARAMS) as BotStrategy[]).includes(
       body.strategy as BotStrategy,
@@ -503,7 +511,11 @@ export function registerTradeRoutes(app: FastifyInstance, ctx: Context): void {
     return ctx.trading.lock.run(() =>
       ctx.db.tx(async () => {
         const owner = await ctx.trading.accountFor(id, userId);
-        if (budget > owner.cash) throw badRequest('So viel Bargeld hast du nicht.');
+        if (price + budget > owner.cash) {
+          throw badRequest(
+            `Der Bot kostet ${(Number(price) / 100).toFixed(0)} $ plus Budget. So viel Bargeld hast du nicht.`,
+          );
+        }
 
         const at = now();
         const botAccountId = newId();
@@ -512,13 +524,19 @@ export function registerTradeRoutes(app: FastifyInstance, ctx: Context): void {
           trimText(body.name, 20) ||
           (BOT_NAMES[Math.floor(Math.random() * BOT_NAMES.length)] as string);
 
-        // Budget vom eigenen Konto auf das Bot-Konto umbuchen.
-        const ownerCash = owner.cash - budget;
+        // Kaufpreis und Budget vom eigenen Konto abbuchen. Der Kaufpreis ist
+        // weg - das Budget nicht, das arbeitet weiter, nur eben nicht bei dir.
+        const ownerCash = owner.cash - budget - price;
         await ctx.db.run('UPDATE accounts SET cash = ?, updated_at = ? WHERE id = ?', [
           ownerCash.toString(),
           at,
           owner.id,
         ]);
+        await ctx.db.run(
+          `INSERT INTO ledger (id, account_id, kind, amount, balance_after, ref, at)
+           VALUES (?, ?, 'bot_purchase', ?, ?, ?, ?)`,
+          [newId(), owner.id, (-price).toString(), (owner.cash - price).toString(), botId, at],
+        );
         await ctx.db.run(
           `INSERT INTO ledger (id, account_id, kind, amount, balance_after, ref, at)
            VALUES (?, ?, 'bot_funding', ?, ?, ?, ?)`,
@@ -750,9 +768,12 @@ async function botSlots(
   const effects = resolveEffects(new Map(upgrades.map((entry) => [entry.upgrade_key, int(entry.level)])));
 
   return {
-    unlocked: trades >= TRADES_FOR_FIRST_BOT,
+    // Ein Bot wird gekauft, nicht freigeschaltet - die Huerde ist Geld, nicht
+    // Wartezeit. Wer am ersten Abend einen will, kann ihn haben; es kostet
+    // ihn nur Kapital, das er nicht mehr selbst anlegen kann.
+    unlocked: true,
     slots: effects.botSlots,
     trades,
-    tradesNeeded: Math.max(0, TRADES_FOR_FIRST_BOT - trades),
+    tradesNeeded: 0,
   };
 }

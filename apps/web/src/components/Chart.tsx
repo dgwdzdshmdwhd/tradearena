@@ -180,7 +180,7 @@ export function Chart({
   );
 
   return (
-    <div className="panel flex min-h-0 flex-1 flex-col">
+    <div className="panel flex min-h-0 flex-1 flex-col" data-tour="chart">
       <div className="panel-head">
         <span className="num truncate normal-case tracking-normal text-[13.5px] text-[var(--color-fg)]">
           {title}

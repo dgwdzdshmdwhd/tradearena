@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 
 import { ApiError, api, quiet, type Bot, type Instrument, type LeagueDetail } from '../lib/api.js';
+import { askConfirm } from '../lib/confirm.js';
 import { fmtBps, fmtTime, fmtUsd, returnBps, signClass, toCents } from '../lib/format.js';
 import { pushToast } from '../lib/toast.js';
 import { Icon } from './Icon.js';
@@ -9,6 +10,7 @@ import { Empty, Field, Modal } from './Ui.js';
 interface BotsResponse {
   bots: Bot[];
   slots: { unlocked: boolean; slots: number; trades: number; tradesNeeded: number };
+  nextPriceCents: string;
   botsAllowed: boolean;
   strategies: Array<{ key: string; label: string; params: Record<string, number> }>;
 }
@@ -74,7 +76,7 @@ export function BotsPanel({
             className="normal-case tracking-normal text-[var(--color-fg-3)] hover:text-[var(--color-fg)]"
             onClick={() => setCreating(true)}
           >
-            einstellen
+            Bot kaufen
           </button>
         ) : null}
       </div>
@@ -86,20 +88,6 @@ export function BotsPanel({
           </Empty>
         ) : null}
 
-        {league.botsAllowed && slots && !slots.unlocked ? (
-          <div className="px-4 py-8 text-center">
-            <span className="dimmer mb-3 inline-block">
-              <Icon name="cpu" size={22} strokeWidth={1.25} />
-            </span>
-            <div className="mb-1 text-[15px] font-medium">Dein erster Bot muss verdient werden</div>
-            <p className="dimmer mb-3 text-[13px]">
-              Noch <span className="num">{slots.tradesNeeded}</span> Trades.
-            </p>
-            <div className="meter mx-auto max-w-[13rem]">
-              <i style={{ width: `${Math.min(100, (slots.trades / TRADES_FOR_FIRST_BOT) * 100)}%` }} />
-            </div>
-          </div>
-        ) : null}
 
         {active.map((bot) => {
           const bps = returnBps(bot.equity, bot.start_cash);
@@ -191,9 +179,19 @@ export function BotsPanel({
                 <button
                   className="btn btn-sell btn-sm"
                   onClick={() => {
-                    if (window.confirm(`${bot.name} entlassen? Position wird glattgestellt.`)) {
-                      void act(bot.id, 'fire');
-                    }
+                    void (async () => {
+                      const yes = await askConfirm({
+                        title: `${bot.name} entlassen?`,
+                        body: [
+                          'Offene Positionen werden sofort glattgestellt, das Budget kommt zurueck auf dein Konto.',
+                          'Der Platz wird wieder frei - einen neuen Bot musst du aber erneut kaufen.',
+                        ],
+                        confirmLabel: 'Entlassen',
+                        tone: 'danger',
+                        icon: 'cpu',
+                      });
+                      if (yes) await act(bot.id, 'fire');
+                    })();
                   }}
                 >
                   entlassen
@@ -209,6 +207,7 @@ export function BotsPanel({
           leagueId={leagueId}
           instruments={instruments}
           strategies={data.strategies}
+          priceCents={data.nextPriceCents}
           onClose={() => setCreating(false)}
           onCreated={() => {
             setCreating(false);
@@ -225,12 +224,14 @@ function CreateBot({
   leagueId,
   instruments,
   strategies,
+  priceCents,
   onClose,
   onCreated,
 }: {
   leagueId: string;
   instruments: Instrument[];
   strategies: Array<{ key: string; label: string }>;
+  priceCents: string;
   onClose: () => void;
   onCreated: () => void;
 }): JSX.Element {
@@ -310,8 +311,25 @@ function CreateBot({
           </Field>
         </div>
 
+        <div className="rounded-[var(--radius)] border border-[var(--color-hairline)] bg-[var(--color-bg)] p-2.5 text-[12.5px]">
+          <div className="flex justify-between">
+            <span className="dimmer">Anschaffung</span>
+            <span className="num">{fmtUsd(priceCents)}</span>
+          </div>
+          <div className="flex justify-between">
+            <span className="dimmer">Budget</span>
+            <span className="num">{fmtUsd(toCents(budget))}</span>
+          </div>
+          <div className="mt-1 flex justify-between border-t border-[var(--color-hairline)] pt-1">
+            <span className="dimmer">kostet dich sofort</span>
+            <span className="num font-medium">
+              {fmtUsd(String(Number(priceCents) + Number(toCents(budget))))}
+            </span>
+          </div>
+        </div>
+
         <p className="dimmer text-[12.5px] leading-relaxed">
-          Das Budget wandert auf ein eigenes Bot-Konto. Der Bot zahlt dieselben Gebuehren wie du und
+          Die Anschaffung ist weg, das Budget nicht - das arbeitet weiter, nur nicht bei dir. Der Bot zahlt dieselben Gebuehren wie du und
           sieht dieselben Kurse — und er macht Fehler. Mit jedem Level werden es weniger, nie null.
         </p>
 

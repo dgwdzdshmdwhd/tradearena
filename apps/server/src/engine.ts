@@ -135,6 +135,7 @@ export class Engine {
       await this.processBots(league, quotes, at);
     }
 
+    await this.processPulls(league, at);
     await this.resolveBets(league, quotes, at);
     await this.checkLeagueEnd(league, at);
   }
@@ -624,6 +625,32 @@ export class Engine {
       'UPDATE bots SET xp = ?, level = ?, error_rate_bps = ?, last_action_at = ? WHERE id = ?',
       [xp, level, errorRateForLevel(level), at, bot.id],
     );
+  }
+
+  /**
+   * Angekuendigte Liquiditaets-Abzuege ausfuehren, sobald der Countdown
+   * abgelaufen ist. Was die Halter in den zehn Sekunden herausgeholt haben,
+   * fehlt dem Abziehenden - deshalb laeuft es hier und nicht sofort beim
+   * Knopfdruck.
+   */
+  private async processPulls(league: League, at: number): Promise<void> {
+    const faellig = await this.db.all<{ instrument_id: string }>(
+      `SELECT instrument_id FROM coins
+       WHERE league_id = ? AND status = 'live' AND pull_at IS NOT NULL AND pull_at <= ?`,
+      [league.id, at],
+    );
+
+    for (const coin of faellig) {
+      try {
+        await this.trading.executePull(coin.instrument_id);
+      } catch (error) {
+        console.error('[engine] Abzug fehlgeschlagen:', error);
+        await this.db.run(
+          'UPDATE coins SET pull_at = NULL, pull_account_id = NULL, pull_pct = NULL WHERE instrument_id = ?',
+          [coin.instrument_id],
+        );
+      }
+    }
   }
 
   // -------------------------------------------------------------- Wetten

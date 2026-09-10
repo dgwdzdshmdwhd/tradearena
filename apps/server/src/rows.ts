@@ -285,6 +285,9 @@ export interface CoinRow {
   created_at: number;
   rugged_at: number | null;
   rugged_amount: string | null;
+  pull_at: number | null;
+  pull_account_id: string | null;
+  pull_pct: number | null;
 }
 
 export interface BotRow {

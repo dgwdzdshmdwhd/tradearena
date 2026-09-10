@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 
+import { Announce } from './components/Announce.js';
+import { ConfirmHost } from './components/ConfirmHost.js';
 import { Toasts } from './components/Toasts.js';
 import { ApiError, api, quiet, type Me } from './lib/api.js';
 import { live, useLiveEvent } from './lib/live.js';
@@ -162,6 +164,8 @@ export function App(): JSX.Element {
       {route.name === 'league' ? <Terminal me={me} leagueId={route.id} /> : null}
       {route.name === 'desk' ? <Desk me={me} onRefresh={() => quiet(loadMe())} /> : null}
       {route.name === 'profile' ? <Profile userId={route.id} /> : null}
+      <Announce />
+      <ConfirmHost />
       <Toasts />
     </>
   );

@@ -6,7 +6,7 @@ import { Chart } from '../components/Chart.js';
 import { CoinsPanel } from '../components/CoinsPanel.js';
 import { Icon, MODE_ICONS } from '../components/Icon.js';
 import { NextStep } from '../components/NextStep.js';
-import { Onboarding } from '../components/Onboarding.js';
+import { Tour } from '../components/Tour.js';
 import { Leaderboard, OpenOrders, OrderBook, Positions, Watchlist } from '../components/Panels.js';
 import { Chat, Feed } from '../components/Social.js';
 import { StatsPanel } from '../components/StatsPanel.js';
@@ -25,6 +25,7 @@ import {
   type Me,
   type Portfolio,
 } from '../lib/api.js';
+import { askConfirm } from '../lib/confirm.js';
 import { fmtBps, fmtCountdown, fmtUsd, priceToNumber, returnBps, signClass } from '../lib/format.js';
 import { useLeagueSubscription, useLiveEvent, usePrices } from '../lib/live.js';
 import { confetti, isSoundEnabled, setSoundEnabled, sounds } from '../lib/sound.js';
@@ -244,7 +245,17 @@ export function Terminal({ me, leagueId }: { me: Me; leagueId: string }): JSX.El
   };
 
   const finishLeague = async (): Promise<void> => {
-    if (!window.confirm('Liga jetzt fuer alle beenden?')) return;
+    const yes = await askConfirm({
+      title: 'Liga jetzt beenden?',
+      body: [
+        'Die Runde endet fuer alle sofort, offene Positionen werden bewertet und die Rangliste wird eingefroren.',
+        'Zurueckdrehen kannst du das nicht.',
+      ],
+      confirmLabel: 'Beenden',
+      tone: 'danger',
+      icon: 'flag',
+    });
+    if (!yes) return;
     await api.post(`/api/leagues/${leagueId}/finish`);
     quiet(loadLeague());
     quiet(loadBoard());
@@ -359,6 +370,7 @@ export function Terminal({ me, leagueId }: { me: Me; leagueId: string }): JSX.El
             <button
               className="hidden w-[10rem] text-left sm:block"
               onClick={() => navigate('/desk')}
+            data-tour="desk"
               title={
                 desk.next
                   ? `${desk.lifetime} von ${desk.next.minPrestige} Prestige bis ${desk.next.title}`
@@ -467,7 +479,7 @@ export function Terminal({ me, leagueId }: { me: Me; leagueId: string }): JSX.El
 
       {/* Desktop */}
       <div className="hidden min-h-0 flex-1 gap-2 p-2 lg:flex">
-        <div className="flex w-[14.5rem] shrink-0 flex-col gap-2">
+        <div className="flex w-[14.5rem] shrink-0 flex-col gap-2" data-tour="markets">
           <div className="min-h-0 flex-[3]">
             <Watchlist
               instruments={instruments}
@@ -495,7 +507,7 @@ export function Terminal({ me, leagueId }: { me: Me; leagueId: string }): JSX.El
             simple={simple}
           />
 
-          <div className="panel flex h-[15.5rem] min-h-0 flex-col">
+          <div className="panel flex h-[15.5rem] min-h-0 flex-col" data-tour="positions">
             <Tabs
               tabs={['positionen', 'orders', 'auswertung'] as const}
               active={mainPanel}
@@ -531,7 +543,7 @@ export function Terminal({ me, leagueId }: { me: Me; leagueId: string }): JSX.El
             simple={simple}
           />
 
-          <div className="panel flex min-h-0 flex-1 flex-col">
+          <div className="panel flex min-h-0 flex-1 flex-col" data-tour="side">
             <Tabs tabs={sideTabs} active={sidePanel} onChange={setSidePanel} labels={SIDE_LABELS} />
             <div className="min-h-0 flex-1 [&>*]:h-full [&>*]:rounded-none [&>*]:border-0">
               {sidePanelContent}
@@ -630,7 +642,7 @@ export function Terminal({ me, leagueId }: { me: Me; leagueId: string }): JSX.El
       </div>
 
       {showTutorial ? (
-        <Onboarding
+        <Tour
           onClose={() => {
             localStorage.setItem('ta_tutorial_done', '1');
             setShowTutorial(false);
