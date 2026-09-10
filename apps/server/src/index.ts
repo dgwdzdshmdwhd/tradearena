@@ -85,7 +85,29 @@ async function main(): Promise<void> {
   // uebernimmt das Vite auf Port 5173.
   const webRoot = config.webRoot ?? resolve(here, '../../web/dist');
   if (existsSync(webRoot)) {
-    await app.register(fastifyStatic, { root: webRoot, wildcard: false });
+    await app.register(fastifyStatic, {
+      root: webRoot,
+      wildcard: false,
+      // Ohne das setzt @fastify/static seinen eigenen Cache-Header und
+      // ueberschreibt damit alles, was `setHeaders` gerade gesetzt hat.
+      cacheControl: false,
+      /**
+       * Cache-Strategie, ohne die nach jedem Deploy eine weisse Seite steht:
+       *
+       * Die Dateien unter /assets/ tragen einen Hash im Namen und aendern
+       * sich nie - die darf der Browser ewig behalten. Die index.html
+       * dagegen zeigt auf genau diese Namen. Wird sie gecacht, fragt ein
+       * Browser nach dem naechsten Deploy eine JavaScript-Datei an, die es
+       * nicht mehr gibt, und zeigt gar nichts an. Also: immer neu pruefen.
+       */
+      setHeaders: (response, filePath) => {
+        if (filePath.endsWith('.html')) {
+          response.setHeader('Cache-Control', 'no-cache');
+        } else if (filePath.includes('assets')) {
+          response.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+        }
+      },
+    });
 
     // Alles, was keine API-Route und keine Datei ist, bekommt die
     // Single-Page-App.
@@ -103,7 +125,7 @@ async function main(): Promise<void> {
         return;
       }
 
-      void reply.sendFile('index.html');
+      void reply.header('Cache-Control', 'no-cache').sendFile('index.html');
     });
     console.log(`[web] liefere ${webRoot}`);
   } else {
