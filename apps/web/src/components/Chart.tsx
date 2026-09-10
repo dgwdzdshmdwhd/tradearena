@@ -29,12 +29,15 @@ export function Chart({
   onInterval,
   title,
   livePrice,
+  simple = false,
 }: {
   candles: Candle[];
   interval: string;
   onInterval: (value: string) => void;
   title: string;
   livePrice: number | null;
+  /** Einfacher Modus: ohne Indikator-Schalter. */
+  simple?: boolean;
 }): JSX.Element {
   const holder = useRef<HTMLDivElement>(null);
   const chartRef = useRef<IChartApi | null>(null);
@@ -194,11 +197,14 @@ export function Chart({
             </span>
           ) : null}
 
-          <Chip active={showSma} onClick={() => setShowSma(!showSma)} label="SMA" />
-          <Chip active={showEma} onClick={() => setShowEma(!showEma)} label="EMA" />
-          <Chip active={showRsi} onClick={() => setShowRsi(!showRsi)} label="RSI" />
-
-          <span className="mx-1 h-3 w-px bg-[var(--color-border)]" />
+          {simple ? null : (
+            <>
+              <Chip active={showSma} onClick={() => setShowSma(!showSma)} label="SMA" />
+              <Chip active={showEma} onClick={() => setShowEma(!showEma)} label="EMA" />
+              <Chip active={showRsi} onClick={() => setShowRsi(!showRsi)} label="RSI" />
+              <span className="mx-1 h-3 w-px bg-[var(--color-border)]" />
+            </>
+          )}
 
           {INTERVALS.map((value) => (
             <Chip

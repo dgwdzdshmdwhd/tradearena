@@ -5,6 +5,7 @@ import { BotsPanel } from '../components/BotsPanel.js';
 import { Chart } from '../components/Chart.js';
 import { CoinsPanel } from '../components/CoinsPanel.js';
 import { Icon, MODE_ICONS } from '../components/Icon.js';
+import { NextStep } from '../components/NextStep.js';
 import { Onboarding } from '../components/Onboarding.js';
 import { Leaderboard, OpenOrders, OrderBook, Positions, Watchlist } from '../components/Panels.js';
 import { Chat, Feed } from '../components/Social.js';
@@ -81,6 +82,9 @@ export function Terminal({ me, leagueId }: { me: Me; leagueId: string }): JSX.El
   const [showTutorial, setShowTutorial] = useState(
     () => localStorage.getItem('ta_tutorial_done') !== '1',
   );
+  // Einfacher Modus ist der Standard. Ein Handelsterminal mit Orderbuch,
+  // fuenf Ordertypen und Indikatoren ist fuer den ersten Abend eine Wand.
+  const [simple, setSimple] = useState(() => localStorage.getItem('ta_pro') !== '1');
 
   const prices = usePrices();
   useLeagueSubscription(leagueId);
@@ -362,6 +366,18 @@ export function Terminal({ me, leagueId }: { me: Me; leagueId: string }): JSX.El
 
           <button
             className="btn btn-ghost btn-sm"
+            title={simple ? 'Alle Werkzeuge einblenden' : 'Auf die einfache Ansicht zurueck'}
+            onClick={() => {
+              const next = !simple;
+              setSimple(next);
+              localStorage.setItem('ta_pro', next ? '0' : '1');
+            }}
+          >
+            {simple ? 'Pro' : 'Einfach'}
+          </button>
+
+          <button
+            className="btn btn-ghost btn-sm"
             onClick={() => navigate('/desk')}
             title={
               desk.next
@@ -409,6 +425,18 @@ export function Terminal({ me, leagueId }: { me: Me; leagueId: string }): JSX.El
         </div>
       ) : null}
 
+      <NextStep
+        portfolio={portfolio}
+        league={league}
+        bots={bots}
+        meUserId={me.user.id}
+        prestige={desk.prestige}
+        onOpenPanel={(panel) => {
+          setSidePanel(panel);
+          setMobileTab('liga');
+        }}
+      />
+
       {league.status === 'finished' && league.reveal ? (
         <div className="flex items-center justify-center gap-2 border-b border-[var(--color-hairline)] bg-[var(--color-raised)] px-3 py-1.5 text-[11.5px]">
           <span className="accent">
@@ -429,9 +457,13 @@ export function Terminal({ me, leagueId }: { me: Me; leagueId: string }): JSX.El
               onSelect={setSelectedId}
             />
           </div>
-          <div className="min-h-0 flex-[2]">
-            <OrderBook instrument={selected} prices={prices} />
-          </div>
+          {/* Das Orderbuch ist Deko - es beeinflusst die Ausfuehrung nicht.
+              Im einfachen Modus ist es nur eine Wand aus Zahlen. */}
+          {simple ? null : (
+            <div className="min-h-0 flex-[2]">
+              <OrderBook instrument={selected} prices={prices} />
+            </div>
+          )}
         </div>
 
         <div className="flex min-w-0 flex-1 flex-col gap-2">
@@ -441,6 +473,7 @@ export function Terminal({ me, leagueId }: { me: Me; leagueId: string }): JSX.El
             onInterval={setIntervalValue}
             title={selected?.display ?? '—'}
             livePrice={livePrice}
+            simple={simple}
           />
 
           <div className="panel flex h-[15.5rem] min-h-0 flex-col">
@@ -476,6 +509,7 @@ export function Terminal({ me, leagueId }: { me: Me; leagueId: string }): JSX.El
               quiet(loadFeed());
               quiet(loadDesk());
             }}
+            simple={simple}
           />
 
           <div className="panel flex min-h-0 flex-1 flex-col">
@@ -508,6 +542,7 @@ export function Terminal({ me, leagueId }: { me: Me; leagueId: string }): JSX.El
               onInterval={setIntervalValue}
               title={selected?.display ?? '—'}
               livePrice={livePrice}
+              simple={simple}
             />
           </>
         ) : null}
@@ -522,6 +557,7 @@ export function Terminal({ me, leagueId }: { me: Me; leagueId: string }): JSX.El
                 quiet(loadPortfolio());
                 quiet(loadBoard());
               }}
+              simple={simple}
             />
           </div>
         ) : null}

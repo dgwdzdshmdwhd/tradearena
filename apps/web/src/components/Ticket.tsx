@@ -20,14 +20,20 @@ export function Ticket({
   instrument,
   portfolio,
   onDone,
+  simple = false,
 }: {
   leagueId: string;
   instrument: Instrument | null;
   portfolio: Portfolio | null;
   onDone: () => void;
+  /** Einfacher Modus: nur Betrag, Kaufen, Verkaufen. Alles andere weggeraeumt. */
+  simple?: boolean;
 }): JSX.Element {
   const [side, setSide] = useState<'buy' | 'sell'>('buy');
   const [type, setType] = useState<string>('market');
+  // Im einfachen Modus sind die Feinheiten erst mal zugeklappt. Wer sie
+  // braucht, findet sie - wer sie nicht kennt, wird nicht damit erschlagen.
+  const [advanced, setAdvanced] = useState(!simple);
   const [useNotional, setUseNotional] = useState(true);
   const [amount, setAmount] = useState('1000');
   const [limitPrice, setLimitPrice] = useState('');
@@ -175,16 +181,18 @@ export function Ticket({
           onChange={setSide}
         />
 
-        <div>
-          <select className="input" value={type} onChange={(event) => setType(event.target.value)}>
-            {TYPES.map((entry) => (
-              <option key={entry.key} value={entry.key}>
-                {entry.label}
-              </option>
-            ))}
-          </select>
-          <p className="dimmer mt-1.5 text-[11px] leading-snug">{selected?.hint}</p>
-        </div>
+        {advanced ? (
+          <div>
+            <select className="input" value={type} onChange={(event) => setType(event.target.value)}>
+              {TYPES.map((entry) => (
+                <option key={entry.key} value={entry.key}>
+                  {entry.label}
+                </option>
+              ))}
+            </select>
+            <p className="dimmer mt-1.5 text-[11px] leading-snug">{selected?.hint}</p>
+          </div>
+        ) : null}
 
         <div>
           <div className="mb-1 flex items-center justify-between">
@@ -204,16 +212,31 @@ export function Ticket({
             inputMode="decimal"
           />
 
+          {/* Im einfachen Modus konkrete Betraege statt Prozentwerte -
+              "500 $" versteht jeder sofort, "25 %" wovon? */}
           <div className="mt-1 grid grid-cols-4 gap-1">
-            {[0.25, 0.5, 0.75, 1].map((fraction) => (
-              <button
-                key={fraction}
-                className="btn btn-sm justify-center px-0"
-                onClick={() => quickAmount(fraction)}
-              >
-                {fraction === 1 ? 'max' : `${fraction * 100} %`}
-              </button>
-            ))}
+            {simple && useNotional
+              ? [100, 500, 1_000].map((value) => (
+                  <button
+                    key={value}
+                    className="btn btn-sm justify-center px-0"
+                    onClick={() => setAmount(String(value))}
+                  >
+                    {value} $
+                  </button>
+                ))
+              : [0.25, 0.5, 0.75].map((fraction) => (
+                  <button
+                    key={fraction}
+                    className="btn btn-sm justify-center px-0"
+                    onClick={() => quickAmount(fraction)}
+                  >
+                    {fraction * 100} %
+                  </button>
+                ))}
+            <button className="btn btn-sm justify-center px-0" onClick={() => quickAmount(1)}>
+              max
+            </button>
           </div>
         </div>
 
@@ -252,17 +275,19 @@ export function Ticket({
           </Field>
         ) : null}
 
-        <div className="space-y-2">
-          <Toggle checked={dayOnly} onChange={setDayOnly} label="Nur heute gueltig" />
-          <Toggle checked={reduceOnly} onChange={setReduceOnly} label="Nur Position schliessen" />
-          {type === 'market' ? (
-            <Toggle
-              checked={useBracket}
-              onChange={setUseBracket}
-              label="Stop-Loss und Take-Profit anhaengen"
-            />
-          ) : null}
-        </div>
+        {advanced ? (
+          <div className="space-y-2">
+            <Toggle checked={dayOnly} onChange={setDayOnly} label="Nur heute gueltig" />
+            <Toggle checked={reduceOnly} onChange={setReduceOnly} label="Nur Position schliessen" />
+            {type === 'market' ? (
+              <Toggle
+                checked={useBracket}
+                onChange={setUseBracket}
+                label="Stop-Loss und Take-Profit anhaengen"
+              />
+            ) : null}
+          </div>
+        ) : null}
 
         {useBracket && type === 'market' ? (
           <div className="grid grid-cols-2 gap-2">
@@ -303,13 +328,24 @@ export function Ticket({
         ) : null}
 
         <button
-          className={`btn w-full ${side === 'buy' ? 'btn-buy' : 'btn-sell'}`}
+          className={`btn w-full ${side === 'buy' ? 'btn-buy' : 'btn-sell'} ${
+            simple ? 'h-11 text-[15px]' : ''
+          }`}
           onClick={() => void submit()}
           disabled={busy || !instrument}
         >
-          <Icon name={side === 'buy' ? 'arrow-up' : 'arrow-down'} size={13} />
+          <Icon name={side === 'buy' ? 'arrow-up' : 'arrow-down'} size={simple ? 15 : 13} />
           {busy ? '…' : side === 'buy' ? 'Kaufen' : 'Verkaufen'}
         </button>
+
+        {simple ? (
+          <button
+            className="dimmer w-full text-center text-[11px] hover:text-[var(--color-fg-2)]"
+            onClick={() => setAdvanced(!advanced)}
+          >
+            {advanced ? 'weniger anzeigen' : 'Limit, Stop und mehr'}
+          </button>
+        ) : null}
 
         <div className="space-y-0.5 text-[11px]">
           {portfolio ? (
