@@ -54,7 +54,7 @@ export function Feed({
             >
               <div className="flex items-start gap-2.5">
                 <span className={`mt-0.5 ${described.tone ?? 'dimmer'}`}>
-                  <Icon name={FEED_ICONS[event.kind] ?? 'list'} size={14} />
+                  <Icon name={described.icon ?? FEED_ICONS[event.kind] ?? 'list'} size={14} />
                 </span>
 
                 <div className="min-w-0 flex-1">
@@ -145,7 +145,7 @@ function ReactionPicker({ onPick }: { onPick: (key: string) => void }): JSX.Elem
 }
 
 /** Aus einem Ereignis einen Satz machen, den man gern liest. */
-function describe(event: FeedEvent): { text: ReactNode; tone?: string } {
+function describe(event: FeedEvent): { text: ReactNode; tone?: string; icon?: IconName } {
   const payload = event.payload as Record<string, string | number | null>;
   const who = event.username ?? 'Jemand';
 
@@ -155,7 +155,14 @@ function describe(event: FeedEvent): { text: ReactNode; tone?: string } {
       const realized = Number(payload.realizedCents ?? 0);
 
       return {
-        tone: buy ? 'up' : 'down',
+        /*
+         * Wurde ein Trade geschlossen, zaehlt das Ergebnis - nicht die
+         * Richtung. Ein roter Pfeil neben einem gruenen Plus liest sich
+         * widerspruechlich: "Verkauf" ist keine schlechte Nachricht, wenn
+         * Gewinn dabei herauskommt.
+         */
+        tone: realized !== 0 ? (realized > 0 ? 'up' : 'down') : 'dim',
+        icon: buy ? 'arrow-up' : 'arrow-down',
         text: (
           <>
             <b className="font-medium">{who}</b> {buy ? 'kauft' : 'verkauft'}{' '}

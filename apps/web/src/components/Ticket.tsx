@@ -76,11 +76,29 @@ export function Ticket({
 
   const quickAmount = (fraction: number): void => {
     if (useNotional) {
-      const base = side === 'buy' ? Math.max(buyingPower, cash) : cash;
+      /*
+       * Beim Verkaufen ist "alles" die Position, nicht das Bargeld. Vorher
+       * schlug "max" das Bargeld vor - wer 90.000 $ in BTC hielt und 9.000 $
+       * bar hatte, bekam 9.000 $ vorgeschlagen statt seine Position.
+       *
+       * Gerechnet wird mit BigInt: Menge und Kurs sind beide 1e8-skaliert,
+       * ihr Produkt sprengt die Genauigkeit von JavaScript-Zahlen.
+       */
+      const positionValue =
+        position && Number(position.qty) !== 0
+          ? Number(
+              (BigInt(position.qty) * BigInt(position.mark)) / 100_000_000_000_000n,
+            )
+          : 0;
+
+      const base =
+        side === 'sell' && positionValue > 0 ? Math.abs(positionValue) : Math.max(buyingPower, cash);
+
       setAmount(String(Math.max(1, Math.floor(centsToNumber(String(base)) * fraction))));
       return;
     }
-    if (position) setAmount(String((Number(position.qty) / 1e8) * fraction));
+
+    if (position) setAmount(String(Math.abs(Number(position.qty) / 1e8) * fraction));
   };
 
   const submit = async (): Promise<void> => {
