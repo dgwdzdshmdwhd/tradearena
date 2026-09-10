@@ -167,17 +167,34 @@ export class SimMarket {
         [instrument.id],
       );
 
+      const stored = candles.map((candle) => ({
+        t: int(candle.t),
+        o: Number(candle.o),
+        h: Number(candle.h),
+        l: Number(candle.l),
+        c: Number(candle.c),
+        v: Number(candle.v),
+      }));
+
+      // Fehlt Vorgeschichte, wird sie vor den vorhandenen Teil gesetzt. Das
+      // gilt auch fuer Werte, die schon ein paar Minuten laufen - sonst haette
+      // ein am ersten Abend gestarteter Server dieselbe leere Wand wie ein
+      // ganz neuer.
+      const fehlend = BACKFILL_MINUTES - stored.length;
       const history =
-        candles.length > 0
-          ? candles.map((candle) => ({
-              t: int(candle.t),
-              o: Number(candle.o),
-              h: Number(candle.h),
-              l: Number(candle.l),
-              c: Number(candle.c),
-              v: Number(candle.v),
-            }))
-          : await this.backfill(instrument.id, def.symbol, pool, def.params, at);
+        fehlend > 0
+          ? [
+              ...(await this.backfill(
+                instrument.id,
+                def.symbol,
+                def.params,
+                stored[0]?.o ?? Number(poolPrice(pool)) / 1e8,
+                stored[0]?.t ?? Math.floor(at / 60_000) * 60_000,
+                fehlend,
+              )),
+              ...stored,
+            ]
+          : stored;
 
       this.assets.set(instrument.id, {
         instrumentId: instrument.id,
@@ -267,32 +284,34 @@ export class SimMarket {
   }
 
   /**
-   * Erfindet einem neuen Wert eine Vergangenheit - rueckwaerts gerechnet, damit
-   * die letzte Kerze genau auf dem Kurs endet, den der Pool gerade hat.
+   * Rechnet einem Wert die fehlende Vergangenheit vor - rueckwaerts vom
+   * Ankerpunkt, damit die erzeugte Reihe genau dort ansetzt, wo die echte
+   * anfaengt. Keine Stufe, keine Luecke.
    */
   private async backfill(
     instrumentId: string,
     symbol: string,
-    pool: Pool,
     params: SimParams,
-    at: number,
+    anchorPrice: number,
+    anchorMinute: number,
+    count: number,
   ): Promise<Candle[]> {
-    const current = Number(poolPrice(pool)) / 1e8;
-    if (!Number.isFinite(current) || current <= 0) return [];
+    if (!Number.isFinite(anchorPrice) || anchorPrice <= 0 || count <= 0) return [];
 
     const rng = createRng(seedFrom(`${symbol}:historie`));
     const scale = Number(FACTOR_SCALE);
+    const minute = Math.floor(anchorMinute / 60_000) * 60_000;
 
-    const closes = [current];
-    for (let step = 0; step < BACKFILL_MINUTES; step += 1) {
+    const closes = [anchorPrice];
+    for (let step = 0; step < count; step += 1) {
       const factor = Number(stepFactor(rng, params, 60_000)) / scale;
       const previous = closes[closes.length - 1]! / (factor > 0 ? factor : 1);
-      closes.push(Number.isFinite(previous) && previous > 0 ? previous : current);
+      closes.push(Number.isFinite(previous) && previous > 0 ? previous : anchorPrice);
     }
     closes.reverse();
 
-    const minute = Math.floor(at / 60_000) * 60_000;
-    const candles: Candle[] = closes.map((close, index) => {
+    // Der Ankerpunkt selbst gehoert nicht dazu - er existiert schon.
+    const candles: Candle[] = closes.slice(0, -1).map((close, index) => {
       const open = index === 0 ? close : closes[index - 1]!;
       const docht = Math.abs(close - open) * 0.6 + close * 0.0008;
 
@@ -306,8 +325,7 @@ export class SimMarket {
       };
     });
 
-    // Die letzte Kerze laeuft noch - die schreibt der normale Takt.
-    for (const candle of candles.slice(0, -1)) {
+    for (const candle of candles) {
       await this.db.run(
         `INSERT INTO sim_candles (instrument_id, t, o, h, l, c, v)
          VALUES (?, ?, ?, ?, ?, ?, ?)
