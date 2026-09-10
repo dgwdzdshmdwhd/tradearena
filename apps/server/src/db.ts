@@ -516,6 +516,13 @@ const SCHEMA: string[] = [
     v REAL NOT NULL DEFAULT 0,
     PRIMARY KEY (instrument_id, t)
   )`,
+
+  // Kleine Merkzettel des Servers: einmalige Reparaturen, die genau einmal
+  // laufen sollen. Eine Zeile pro Vorgang, mehr braucht es nicht.
+  `CREATE TABLE IF NOT EXISTS meta (
+    key TEXT PRIMARY KEY,
+    value TEXT NOT NULL
+  )`,
 ];
 
 /**

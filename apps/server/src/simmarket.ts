@@ -305,6 +305,7 @@ export class SimMarket {
       });
     }
 
+    await this.repairAfterIncident(at);
     await this.loadMemes(at);
 
     const memes = [...this.assets.values()].filter((asset) => asset.meme).length;
@@ -463,6 +464,54 @@ export class SimMarket {
       this.lastPersist = at;
       await this.persist(at);
     }
+  }
+
+  /**
+   * Einmalige Reparatur nach dem Leerverkauf vom 11.09.2026.
+   *
+   * Die laufende Sicherung (`healIfBroken`) greift erst bei einem Prozent des
+   * Startkurses - bewusst streng, damit sie nie einen echten Kursverfall
+   * ueberschreibt. HELIX (-96,8 %) und ORBIT (-75,9 %) blieben knapp
+   * darueber haengen, obwohl beide in derselben Minute wie GRAIN zerlegt
+   * wurden: ein Sturz von 96 Prozent innerhalb von sechzig Sekunden ist bei
+   * 52 Basispunkten Schwankung je Minute keine Kursbewegung mehr.
+   *
+   * Statt die Dauerregel aufzuweichen - und damit kuenftig womoeglich echte
+   * Abverkaeufe zurueckzudrehen - wird der Vorfall genau einmal aufgeraeumt.
+   * Der Merkzettel in `meta` sorgt dafuer, dass das nie wieder passiert.
+   */
+  private async repairAfterIncident(at: number): Promise<void> {
+    const schluessel = 'repair_pool_2026_09_11';
+
+    const erledigt = await this.db.get<{ value: string }>('SELECT value FROM meta WHERE key = ?', [
+      schluessel,
+    ]);
+    if (erledigt) return;
+
+    let repariert = 0;
+    for (const asset of this.assets.values()) {
+      const def = SIM_ASSET_BY_SYMBOL.get(asset.symbol);
+      if (!def || asset.meme) continue;
+
+      const price = Number(poolPrice(asset.pool)) / 1e8;
+      const start = Number(def.startPriceCents) / 100;
+      if (Number.isFinite(price) && price > start * 0.5) continue;
+
+      const priceScaled = def.startPriceCents * 1_000_000n;
+      const tokens = (def.depthCents * 100_000_000_000_000n) / priceScaled;
+
+      asset.pool = { ...asset.pool, reserveUsdCents: def.depthCents, reserveTokens: tokens };
+      await this.db.run(
+        'UPDATE sim_assets SET reserve_usd = ?, reserve_tokens = ?, updated_at = ? WHERE instrument_id = ?',
+        [def.depthCents.toString(), tokens.toString(), at, asset.instrumentId],
+      );
+
+      console.log(`[arena] ${asset.symbol} nach Vorfall wiederhergestellt (stand bei ${price})`);
+      repariert += 1;
+    }
+
+    await this.db.run('INSERT INTO meta (key, value) VALUES (?, ?)', [schluessel, String(at)]);
+    if (repariert > 0) console.log(`[arena] ${repariert} Werte einmalig repariert`);
   }
 
   /**
