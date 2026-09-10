@@ -104,6 +104,11 @@ export function registerTradeRoutes(app: FastifyInstance, ctx: Context): void {
         blurb: asset?.blurb ?? null,
         color: asset?.color ?? null,
         event: asset?.event && asset.event.until > now() ? asset.event.headline : null,
+        // Memecoins tragen ihren Zustand offen: Phase, Alter und wie weit es
+        // vom Gipfel weg ist. Den ausgewuerfelten Lebenslauf sieht niemand -
+        // sonst waere die Entscheidung, wann man aussteigt, keine mehr.
+        meme: asset?.meme ? ctx.sim.memeInfo(instrument.id) : null,
+        heat: asset ? ctx.sim.heat(instrument.id) : 0,
         kind: instrument.kind,
         qtyStep: instrument.qtyStep.toString(),
         priceStep: instrument.priceStep.toString(),
@@ -136,7 +141,10 @@ export function registerTradeRoutes(app: FastifyInstance, ctx: Context): void {
       : '1m';
 
     if (instrument.priceSource === 'sim') {
-      return { candles: ctx.sim.candles(instrument.id), interval: '1m' };
+      // Memecoins laufen in Fuenf-Sekunden-Kerzen, Aktien in Minuten. Der
+      // Client soll wissen, was er da sieht.
+      const meme = ctx.sim.asset(instrument.id)?.meme;
+      return { candles: ctx.sim.candles(instrument.id), interval: meme ? '5s' : '1m' };
     }
 
     if (instrument.priceSource === 'amm') {

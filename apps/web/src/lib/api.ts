@@ -126,11 +126,30 @@ export interface LeagueDetail {
   replayLoaded: boolean;
 }
 
+export type MemePhase = 'start' | 'pump' | 'gipfel' | 'abverkauf' | 'ruhe' | 'grab';
+
+/** Was ueber einen laufenden Memecoin oeffentlich ist. */
+export interface MemeInfo {
+  phase: MemePhase;
+  ageMs: number;
+  /** Vielfaches des Startkurses. */
+  multiple: number;
+  /** Abstand zum Hoechststand in Basispunkten, negativ. */
+  fromPeakBps: number;
+}
+
 export interface Instrument {
   id: string;
   symbol: string;
   display: string;
-  kind: 'crypto' | 'coin';
+  kind: 'crypto' | 'coin' | 'sim';
+  name?: string | null;
+  blurb?: string | null;
+  color?: string | null;
+  event?: string | null;
+  meme?: MemeInfo | null;
+  /** Handelsaufkommen der letzten Minuten, 0 bis 100. */
+  heat?: number;
   qtyStep: string;
   priceStep: string;
   minNotionalCents: string;

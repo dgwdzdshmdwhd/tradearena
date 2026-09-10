@@ -161,11 +161,15 @@ export function Terminal({ me, leagueId }: { me: Me; leagueId: string }): JSX.El
     quiet(loadCoins());
   }, [loadLeague, loadInstruments, loadPortfolio, loadBoard, loadFeed, loadChat, loadCoins]);
 
+  // Memecoins laufen in Fuenf-Sekunden-Kerzen. Alle halbe Minute nachladen
+  // hiesse, den halben Anstieg erst hinterher zu sehen.
+  const memeSelected = Boolean(selected?.meme);
+
   useEffect(() => {
     quiet(loadCandles());
-    const handle = setInterval(() => quiet(loadCandles()), 30_000);
+    const handle = setInterval(() => quiet(loadCandles()), memeSelected ? 4_000 : 30_000);
     return () => clearInterval(handle);
-  }, [loadCandles]);
+  }, [loadCandles, memeSelected]);
 
   // Kurse kommen live ueber den WebSocket, der Rest im ruhigen Takt.
   useEffect(() => {
@@ -513,6 +517,7 @@ export function Terminal({ me, leagueId }: { me: Me; leagueId: string }): JSX.El
             title={selected?.display ?? '—'}
             livePrice={livePrice}
             simple={simple}
+            fixedInterval={selected?.meme ? '5s' : null}
           />
 
           <div className="panel flex h-[15.5rem] min-h-0 flex-col" data-tour="positions">
@@ -582,6 +587,7 @@ export function Terminal({ me, leagueId }: { me: Me; leagueId: string }): JSX.El
               title={selected?.display ?? '—'}
               livePrice={livePrice}
               simple={simple}
+              fixedInterval={selected?.meme ? '5s' : null}
             />
           </>
         ) : null}

@@ -227,3 +227,46 @@ describe('Rugpull', () => {
     expect(expired.locked).toBe(false);
   });
 });
+
+describe('Leerverkauf gegen die Kurve', () => {
+  /*
+   * Am 11.09. ist der Arena-Markt daran gestorben: Ein Leerverkauf schob
+   * beliebig viele Token in die Kurve und drueckte GRAIN in einer Minute von
+   * 55 $ auf 0,0000009 $. Danach war der Wert unrettbar - bei einem Kurs von
+   * faktisch null kauft niemand mehr genug zurueck.
+   *
+   * Die Kurve selbst ist dabei nicht kaputt, sie rechnet nur, was man ihr
+   * sagt. Diese Tests halten fest, warum die Grenze woanders sitzen muss:
+   * beim Bestand des Verkaeufers (`fillOrder` in trading.ts).
+   */
+  it('zeigt, wie eine grosse Menge den Kurs praktisch auf null zieht', () => {
+    const { pool } = freshPool(0);
+    const vorher = poolPrice(pool);
+
+    // Das Achttausendfache des Poolbestands - so viel haelt niemand, so viel
+    // kann nur ein Leerverkauf hergeben.
+    const { pool: danach } = ammSell(pool, pool.reserveTokens * 8_000n);
+
+    expect(Number(poolPrice(danach))).toBeLessThan(Number(vorher) / 1_000_000);
+  });
+
+  it('gibt nie mehr aus, als im Pool liegt - der Erloes ist gedeckelt', () => {
+    const { pool } = freshPool(0);
+    const { proceedsCents, pool: danach } = ammSell(pool, pool.reserveTokens * 8_000n);
+
+    expect(proceedsCents).toBeLessThan(pool.reserveUsdCents);
+    expect(danach.reserveUsdCents).toBeGreaterThan(0n);
+  });
+
+  it('bleibt beim Verkauf des eigenen Bestands im ertraeglichen Rahmen', () => {
+    const { pool } = freshPool(0);
+    const vorher = poolPrice(pool);
+
+    // Wer ein Zehntel des Poolbestands haelt und alles abstoesst, drueckt den
+    // Kurs deutlich - aber der Markt lebt weiter. Genau diese Grenze macht
+    // die Bestandspruefung aus.
+    const { pool: danach } = ammSell(pool, pool.reserveTokens / 10n);
+
+    expect(Number(poolPrice(danach))).toBeGreaterThan(Number(vorher) * 0.7);
+  });
+});

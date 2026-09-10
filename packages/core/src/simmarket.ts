@@ -89,6 +89,59 @@ export function applyFactor(reserveUsdCents: Cents, factor: bigint): Cents {
   return next > 0n ? next : 1n;
 }
 
+// ------------------------------------------------------------------ Hype
+
+/**
+ * Halbwertszeit des Kaufdrucks.
+ *
+ * Nach anderthalb Minuten zaehlt ein Kauf nur noch halb. Kurz genug, dass
+ * eine Welle wieder abebbt, lang genug, dass eine abgesprochene Aktion unter
+ * Freunden auch dann noch wirkt, wenn nicht alle im selben Moment klicken.
+ */
+export const HYPE_HALFLIFE_MS = 90_000;
+
+/** Anteil der Pooltiefe, ab dem der Kaufdruck voll durchschlaegt. */
+const HYPE_FULL_SHARE = 0.2;
+
+/** Exponentieller Zerfall eines Hype-Speichers. */
+export function decayHype(value: number, elapsedMs: number, halfLifeMs = HYPE_HALFLIFE_MS): number {
+  if (elapsedMs <= 0 || halfLifeMs <= 0) return value;
+  return value * Math.pow(0.5, elapsedMs / halfLifeMs);
+}
+
+/**
+ * Zusaetzlicher Trend aus dem Kaufdruck der Spieler.
+ *
+ * Der Pool bewegt den Kurs schon beim Kauf - das ist die sofortige Wirkung.
+ * Das hier ist die zweite, langsamere: Handeln viele in dieselbe Richtung,
+ * laeuft der Kurs eine Weile weiter. Damit wird aus einer abgesprochenen
+ * Aktion unter Freunden eine echte Bewegung statt eines kurzen Zuckens.
+ *
+ * Gedeckelt, und zwar streng. Eine Rueckkopplung ohne Deckel ist keine
+ * Spielmechanik, sondern eine Explosion: Kurs steigt, alle kaufen, Kurs
+ * steigt schneller.
+ */
+export function hypeDriftBps(netFlowCents: number, depthCents: number, maxBps: number): number {
+  if (depthCents <= 0) return 0;
+
+  const share = netFlowCents / depthCents / HYPE_FULL_SHARE;
+  const clamped = Math.max(-1, Math.min(1, share));
+
+  return clamped * maxBps;
+}
+
+/**
+ * Hitze von 0 bis 100 fuer die Anzeige.
+ *
+ * Anders als beim Trend zaehlt hier der Umsatz in beide Richtungen: Ein
+ * Abverkauf ist genauso heiss wie ein Ansturm, und beides will man sehen.
+ */
+export function hypeHeat(grossFlowCents: number, depthCents: number): number {
+  if (depthCents <= 0) return 0;
+  const share = grossFlowCents / depthCents / 0.35;
+  return Math.max(0, Math.min(100, Math.round(share * 100)));
+}
+
 export interface SimAssetDef {
   symbol: string;
   name: string;

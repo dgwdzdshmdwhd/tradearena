@@ -30,6 +30,7 @@ export function Chart({
   title,
   livePrice,
   simple = false,
+  fixedInterval = null,
 }: {
   candles: Candle[];
   interval: string;
@@ -38,6 +39,11 @@ export function Chart({
   livePrice: number | null;
   /** Einfacher Modus: ohne Indikator-Schalter. */
   simple?: boolean;
+  /**
+   * Wert mit vorgegebener Kerzenbreite - bei Memecoins fuenf Sekunden.
+   * Dann gibt es nichts umzuschalten, und die Knoepfe waeren eine Luege.
+   */
+  fixedInterval?: string | null;
 }): JSX.Element {
   const holder = useRef<HTMLDivElement>(null);
   const chartRef = useRef<IChartApi | null>(null);
@@ -206,14 +212,18 @@ export function Chart({
             </>
           )}
 
-          {INTERVALS.map((value) => (
-            <Chip
-              key={value}
-              active={interval === value}
-              onClick={() => onInterval(value)}
-              label={value}
-            />
-          ))}
+          {fixedInterval ? (
+            <span className="dimmer num text-[11px] tracking-normal">{fixedInterval}</span>
+          ) : (
+            INTERVALS.map((value) => (
+              <Chip
+                key={value}
+                active={interval === value}
+                onClick={() => onInterval(value)}
+                label={value}
+              />
+            ))
+          )}
         </div>
       </div>
 

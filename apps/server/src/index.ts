@@ -66,6 +66,25 @@ async function main(): Promise<void> {
     })();
   };
 
+  // Ein neuer Memecoin geht alle an - deshalb Vollbild statt Feedzeile.
+  sim.onMeme = (asset) => {
+    void (async () => {
+      const leagues = await db.all<{ id: string }>(
+        "SELECT id FROM leagues WHERE status = 'running' AND market <> 'crypto'",
+      );
+
+      for (const league of leagues) {
+        hub.broadcastLeague(league.id, 'meme_launch', {
+          symbol: asset.symbol,
+          name: asset.name,
+          blurb: asset.blurb,
+          color: asset.color,
+          instrumentId: asset.instrumentId,
+        });
+      }
+    })();
+  };
+
   hub.memberCheck = (userId, leagueId) => trading.isMember(userId, leagueId);
 
   const ctx: Context = { db, trading, engine, feed, replay, hub, sim };

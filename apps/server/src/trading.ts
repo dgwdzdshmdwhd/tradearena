@@ -401,6 +401,18 @@ export class Trading {
     estimate: Fill,
     position: PositionState,
   ): Promise<void> {
+    // Kurvenmaerkte kennen keinen Leerverkauf - siehe `fillOrder`. Hier steht
+    // die Pruefung nur, damit die Absage vor der Order kommt und nicht als
+    // stiller Fehlschlag danach.
+    const onPool = instrument.priceSource === 'amm' || instrument.priceSource === 'sim';
+    if (onPool && side === 'sell' && qty > position.qty) {
+      throw badRequest(
+        position.qty <= 0n
+          ? 'Leerverkauf geht hier nicht - du kannst nur verkaufen, was du haeltst.'
+          : `Du haeltst nur ${(Number(position.qty) / 1e8).toFixed(4)} Stueck.`,
+      );
+    }
+
     const { equity, exposure } = await this.valuate(account, league);
 
     const signed = side === 'buy' ? qty : -qty;
@@ -508,32 +520,53 @@ export class Trading {
 
       const side = orderRow.side as Side;
       const rest = big(orderRow.qty) - big(orderRow.filled_qty);
-      const qty = options.qtyOverride ?? rest;
+      let qty = options.qtyOverride ?? rest;
       if (qty <= 0n) throw badRequest('Nichts mehr auszufuehren.');
+
+      const before = await this.positionFor(account.id, instrument.id);
+      const onPool = instrument.priceSource === 'amm' || instrument.priceSource === 'sim';
+
+      /*
+       * Auf einer Kurve gibt es nichts zu leihen.
+       *
+       * Ein Leerverkauf setzt voraus, dass jemand die Ware verleiht. Ein
+       * Liquiditaetspool tut das nicht - er rechnet nur x*y=k. Wer trotzdem
+       * "verkaufen" darf, was er nicht hat, kann beliebig viele Token in die
+       * Kurve schieben, den Kurs gegen null druecken und fast umsonst
+       * zurueckkaufen. Genau so ist der Arena-Markt am 11.09. gestorben:
+       * GRAIN fiel in einer Minute von 55 $ auf 0,0000009 $.
+       *
+       * Die Pruefung sitzt hier und nicht nur in der Vorpruefung, weil auch
+       * Bots, Stops und Liquidationen durch diese Stelle laufen.
+       */
+      if (onPool && side === 'sell') {
+        if (before.qty <= 0n) {
+          throw badRequest('Leerverkauf geht hier nicht - du kannst nur verkaufen, was du haeltst.');
+        }
+        if (qty > before.qty) qty = before.qty;
+      }
 
       // Alles mit Liquiditaetspool - eigene Coins wie Arena-Werte - laeuft
       // ueber die Kurve. Nur dort bewegt eine Order den Kurs, und genau das
       // ist der Einfluss, den ein Spieler haben soll.
-      const executed =
-        instrument.priceSource === 'amm' || instrument.priceSource === 'sim'
-          ? await this.fillOnPool(instrument, side, qty, rules)
-          : {
-              fill: options.priceOverride
-                ? executeAtPrice(side, qty, options.priceOverride, rules, options.liquidity ?? 'maker')
-                : executeMarket({
-                    side,
-                    qty,
-                    quote,
-                    rules,
-                    volBps: this.volatilityFor(instrument, league),
-                    liquidity: options.liquidity ?? 'taker',
-                  }),
-            };
+      const executed = onPool
+        ? await this.fillOnPool(instrument, side, qty, rules)
+        : {
+            fill: options.priceOverride
+              ? executeAtPrice(side, qty, options.priceOverride, rules, options.liquidity ?? 'maker')
+              : executeMarket({
+                  side,
+                  qty,
+                  quote,
+                  rules,
+                  volBps: this.volatilityFor(instrument, league),
+                  liquidity: options.liquidity ?? 'taker',
+                }),
+          };
 
       const fill = executed.fill;
 
       // 1. Position fortschreiben
-      const before = await this.positionFor(account.id, instrument.id);
       const applied = applyFillToPosition(before, side, fill.qty, fill.price);
 
       // 2. Bargeld und Kennzahlen
@@ -734,6 +767,9 @@ export class Trading {
       const spend = net + fee;
 
       await writeBack(pool.reserveUsdCents + spend, tokensAfter);
+      // Der Kaufdruck traegt den Kurs noch eine Weile weiter - siehe
+      // `withHype` im Arena-Markt.
+      if (isArena) this.sim.noteTrade(instrument.id, spend - fee, 'buy');
 
       // Die Liga-Gebuehr kommt obendrauf. Ohne sie waere Handeln auf dem
       // Arena-Markt gratis - und damit waere haeufiges Hin und Her wieder
@@ -756,6 +792,7 @@ export class Trading {
 
     const result = ammSell(pool, qty);
     await writeBack(result.pool.reserveUsdCents, result.pool.reserveTokens);
+    if (isArena) this.sim.noteTrade(instrument.id, result.proceedsCents, 'sell');
 
     const brokerFee = computeFeeCents(result.proceedsCents, rules.fees, 'taker');
 

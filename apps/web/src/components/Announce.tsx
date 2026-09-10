@@ -82,6 +82,21 @@ export function Announce(): JSX.Element | null {
       );
     }
 
+    if (event === 'meme_launch') {
+      sounds.achievement();
+      show(
+        {
+          kind: 'coin',
+          icon: 'zap',
+          eyebrow: 'Neu am Markt',
+          title: String(data.ticker ?? data.symbol ?? ''),
+          detail: String(data.blurb ?? ''),
+          color: String(data.color ?? '#d4a24c'),
+        },
+        5_000,
+      );
+    }
+
     if (event === 'market_event') {
       show(
         {

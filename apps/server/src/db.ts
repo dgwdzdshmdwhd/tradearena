@@ -500,6 +500,9 @@ const SCHEMA: string[] = [
     event_key TEXT,
     event_drift_bps INTEGER,
     event_until BIGINT,
+    born_at BIGINT,
+    plan TEXT,
+    retired_at BIGINT,
     updated_at BIGINT NOT NULL
   )`,
 
@@ -529,6 +532,9 @@ const MIGRATIONS: string[] = [
   `ALTER TABLE coins ADD COLUMN pull_at BIGINT`,
   `ALTER TABLE coins ADD COLUMN pull_account_id TEXT`,
   `ALTER TABLE coins ADD COLUMN pull_pct INTEGER`,
+  `ALTER TABLE sim_assets ADD COLUMN born_at BIGINT`,
+  `ALTER TABLE sim_assets ADD COLUMN plan TEXT`,
+  `ALTER TABLE sim_assets ADD COLUMN retired_at BIGINT`,
 ];
 
 async function migrate(db: Db): Promise<void> {

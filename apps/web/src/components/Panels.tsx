@@ -1,7 +1,14 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 
 import { navigate } from '../App.js';
-import { api, type Instrument, type LeaderboardEntry, type OrderRow, type Portfolio } from '../lib/api.js';
+import {
+  api,
+  type Instrument,
+  type LeaderboardEntry,
+  type MemePhase,
+  type OrderRow,
+  type Portfolio,
+} from '../lib/api.js';
 import { fmtBps, fmtPrice, fmtQty, fmtUsd, priceToNumber, returnBps, signClass } from '../lib/format.js';
 import type { Prices } from '../lib/live.js';
 import { pushToast } from '../lib/toast.js';
@@ -30,6 +37,115 @@ function LivePrice({ value, className = '' }: { value: string | null; className?
   );
 }
 
+/** Wie eine Memecoin-Phase heisst und aussieht. */
+const PHASEN: Record<MemePhase, { label: string; color: string }> = {
+  start: { label: 'frisch', color: 'var(--color-accent)' },
+  pump: { label: 'laeuft', color: 'var(--color-up)' },
+  gipfel: { label: 'ueberhitzt', color: '#f0a23a' },
+  abverkauf: { label: 'Abverkauf', color: 'var(--color-down)' },
+  ruhe: { label: 'beruhigt', color: 'var(--color-fg-3)' },
+  grab: { label: 'tot', color: 'var(--color-fg-3)' },
+};
+
+/**
+ * Hitzebalken.
+ *
+ * Zeigt, wo gerade wirklich gehandelt wird. Das ist die einzige Anzeige im
+ * Spiel, die von den Mitspielern kommt und nicht vom Markt - und damit die
+ * einzige, die verraet, worauf die anderen gerade schauen.
+ */
+function Heat({ value }: { value: number }): JSX.Element | null {
+  if (value < 8) return null;
+
+  const color = value > 66 ? 'var(--color-down)' : value > 33 ? '#f0a23a' : 'var(--color-accent)';
+
+  return (
+    <span className="flex h-[3px] w-8 overflow-hidden rounded-full bg-[var(--color-hairline)]">
+      <i style={{ width: `${Math.min(100, value)}%`, background: color }} />
+    </span>
+  );
+}
+
+function Zeile({
+  instrument,
+  last,
+  active,
+  onSelect,
+}: {
+  instrument: Instrument;
+  last: string | null;
+  active: boolean;
+  onSelect: (id: string) => void;
+}): JSX.Element {
+  const meme = instrument.meme ?? null;
+  const phase = meme ? PHASEN[meme.phase] : null;
+  const tot = meme?.phase === 'grab';
+
+  return (
+    <button
+      onClick={() => onSelect(instrument.id)}
+      className={`flex w-full items-center gap-2 border-l-2 px-2.5 py-1.5 text-left transition ${
+        active
+          ? 'border-[var(--color-accent)] bg-[var(--color-raised)]'
+          : 'border-transparent hover:bg-[var(--color-raised)]'
+      } ${tot ? 'opacity-45' : ''}`}
+    >
+      {/* Der Farbstrich ordnet die Zeile ihrem Wert zu - im Chart und im
+          Ticket taucht dieselbe Farbe wieder auf. */}
+      <span
+        className="h-6 w-[3px] shrink-0 rounded-full"
+        style={{ background: instrument.color ?? 'var(--color-hairline)' }}
+      />
+
+      <span className="flex min-w-0 flex-1 flex-col gap-0.5">
+        <span className="flex items-center gap-1.5">
+          <span className="truncate text-[14px] font-medium leading-none">
+            {instrument.display}
+          </span>
+          {instrument.kind === 'coin' ? (
+            <span className="dimmer shrink-0 text-[10.5px] uppercase tracking-wider">Coin</span>
+          ) : null}
+        </span>
+
+        <span className="flex items-center gap-1.5">
+          {phase ? (
+            <span
+              className="shrink-0 text-[10.5px] uppercase tracking-wider"
+              style={{ color: phase.color }}
+            >
+              {phase.label}
+            </span>
+          ) : null}
+          {meme && meme.multiple >= 1.5 && !tot ? (
+            <span className="num shrink-0 text-[11px]" style={{ color: 'var(--color-up)' }}>
+              {meme.multiple.toFixed(1)}x
+            </span>
+          ) : null}
+          <Heat value={instrument.heat ?? 0} />
+        </span>
+      </span>
+
+      <span className="flex shrink-0 flex-col items-end gap-0.5">
+        <LivePrice value={last} className="text-[13.5px]" />
+        {instrument.changeBps !== null ? (
+          <span
+            className={`pill ${
+              instrument.changeBps > 0
+                ? 'pill-up'
+                : instrument.changeBps < 0
+                  ? 'pill-down'
+                  : 'pill-flat'
+            }`}
+            style={{ fontSize: '10.5px', padding: '1px 5px' }}
+          >
+            {fmtBps(instrument.changeBps)}
+          </span>
+        ) : null}
+      </span>
+    </button>
+  );
+}
+
 export function Watchlist({
   instruments,
   prices,
@@ -46,6 +162,25 @@ export function Watchlist({
   const shown = instruments.filter((instrument) =>
     filter ? instrument.display.toLowerCase().includes(filter.toLowerCase()) : true,
   );
+
+  /**
+   * Drei Gruppen statt einer langen Liste.
+   *
+   * Memecoins stehen oben, weil sie nur kurz da sind - was in zehn Minuten
+   * vorbei ist, darf man nicht suchen muessen. Innerhalb der Gruppe zuerst
+   * die juengsten: Wer gerade startet, ist die Gelegenheit.
+   */
+  const memes = shown
+    .filter((instrument) => instrument.meme)
+    .sort((a, b) => (a.meme?.ageMs ?? 0) - (b.meme?.ageMs ?? 0));
+  const coins = shown.filter((instrument) => instrument.kind === 'coin');
+  const rest = shown.filter((instrument) => !instrument.meme && instrument.kind !== 'coin');
+
+  const gruppen: Array<{ titel: string; eintraege: Instrument[] }> = [
+    { titel: 'Memecoins', eintraege: memes },
+    { titel: 'Werte', eintraege: rest },
+    { titel: 'Spieler-Coins', eintraege: coins },
+  ];
 
   return (
     <div className="panel flex min-h-0 flex-col">
@@ -69,52 +204,25 @@ export function Watchlist({
       </div>
 
       <div className="min-h-0 flex-1 overflow-y-auto">
-        {shown.map((instrument) => {
-          const tick = prices[instrument.symbol];
-          const last = tick?.last ?? instrument.last;
-          const active = selectedId === instrument.id;
+        {gruppen.map((gruppe) =>
+          gruppe.eintraege.length === 0 ? null : (
+            <div key={gruppe.titel}>
+              <div className="dimmer sticky top-0 z-10 bg-[var(--color-panel)] px-2.5 py-1 text-[10.5px] uppercase tracking-[0.16em]">
+                {gruppe.titel}
+              </div>
 
-          return (
-            <button
-              key={instrument.id}
-              onClick={() => onSelect(instrument.id)}
-              className={`flex w-full items-center justify-between border-l-2 px-2.5 py-1.5 text-left transition ${
-                active
-                  ? 'border-[var(--color-accent)] bg-[var(--color-raised)]'
-                  : 'border-transparent hover:bg-[var(--color-raised)]'
-              }`}
-            >
-              {/* Die Kennzeichnung steht nur bei Coins - bei zehn
-                  Krypto-Zeilen waere "Krypto" darunter reines Rauschen. */}
-              <span className="flex min-w-0 items-center gap-1.5">
-                <span className="truncate text-[14.5px] font-medium">{instrument.display}</span>
-                {instrument.kind === 'coin' ? (
-                  <span className="dimmer shrink-0 text-[11px] uppercase tracking-wider">
-                    Coin
-                  </span>
-                ) : null}
-              </span>
-
-              <span className="flex shrink-0 flex-col items-end gap-0.5">
-                <LivePrice value={last} className="text-[14px]" />
-                {instrument.changeBps !== null ? (
-                  <span
-                    className={`pill ${
-                      instrument.changeBps > 0
-                        ? 'pill-up'
-                        : instrument.changeBps < 0
-                          ? 'pill-down'
-                          : 'pill-flat'
-                    }`}
-                    style={{ fontSize: '11px', padding: '1px 6px' }}
-                  >
-                    {fmtBps(instrument.changeBps)}
-                  </span>
-                ) : null}
-              </span>
-            </button>
-          );
-        })}
+              {gruppe.eintraege.map((instrument) => (
+                <Zeile
+                  key={instrument.id}
+                  instrument={instrument}
+                  last={prices[instrument.symbol]?.last ?? instrument.last}
+                  active={selectedId === instrument.id}
+                  onSelect={onSelect}
+                />
+              ))}
+            </div>
+          ),
+        )}
       </div>
     </div>
   );
