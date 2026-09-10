@@ -36,6 +36,7 @@ let counter = 0;
 export function Announce(): JSX.Element | null {
   const [current, setCurrent] = useState<Announcement | null>(null);
   const [remaining, setRemaining] = useState(0);
+  const [shrunk, setShrunk] = useState(false);
   const timer = useRef<number | null>(null);
 
   const show = (announcement: Omit<Announcement, 'id'>, ttlMs: number): void => {
@@ -107,7 +108,41 @@ export function Announce(): JSX.Element | null {
     return () => window.clearInterval(handle);
   }, [current]);
 
+  // Die Vollbild-Meldung zieht sich nach kurzer Zeit in die Ecke zurueck.
+  // Beim Abzug ist das wichtig: Genau in diesen Sekunden will man verkaufen,
+  // und eine Wand vor dem Orderfenster kostet dann bares Geld.
+  useEffect(() => {
+    setShrunk(false);
+    if (!current) return;
+
+    const handle = window.setTimeout(() => setShrunk(true), 3_000);
+    return () => window.clearTimeout(handle);
+  }, [current]);
+
   if (!current) return null;
+
+  if (shrunk && current.until) {
+    return (
+      <button
+        onClick={() => setCurrent(null)}
+        className="panel enter fixed right-3 top-3 z-[9995] flex items-center gap-3 px-3 py-2 shadow-2xl"
+        style={{ borderColor: current.color }}
+      >
+        <span style={{ color: current.color }}>
+          <Icon name={current.icon} size={18} strokeWidth={1.4} />
+        </span>
+
+        <span className="text-left">
+          <span className="block text-[12.5px] font-semibold">{current.title} wird abgezogen</span>
+          <span className="dimmer block text-[11.5px]">noch Zeit zu verkaufen</span>
+        </span>
+
+        <span className="num text-[26px] font-bold leading-none" style={{ color: current.color }}>
+          {remaining}
+        </span>
+      </button>
+    );
+  }
 
   return (
     <button
