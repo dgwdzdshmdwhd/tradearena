@@ -54,6 +54,12 @@ export function registerTradeRoutes(app: FastifyInstance, ctx: Context): void {
     const out = [];
     for (const row of rows) {
       const instrument = toInstrument(row);
+
+      // Eine Liga handelt entweder den Arena-Markt oder echte Krypto, nie
+      // beides. Sonst waeren die Ergebnisse zweier Ligen nicht vergleichbar.
+      if (instrument.kind === 'sim' && league.market !== 'arena') continue;
+      if (instrument.kind === 'crypto' && league.market !== 'crypto') continue;
+
       if (
         instrument.kind === 'crypto' &&
         league.symbols.length > 0 &&
@@ -63,6 +69,7 @@ export function registerTradeRoutes(app: FastifyInstance, ctx: Context): void {
       }
 
       const quote = await ctx.trading.quoteFor(instrument, league);
+      const asset = instrument.kind === 'sim' ? ctx.sim.asset(instrument.id) : null;
 
       // Die Veraenderung ueber den geladenen Zeitraum. Eine Prozentzahl neben
       // dem Kurs sagt auf einen Blick mehr als der Kurs selbst - ohne sie
@@ -76,15 +83,22 @@ export function registerTradeRoutes(app: FastifyInstance, ctx: Context): void {
 
       const first = candles[0]?.c;
       const latest = candles[candles.length - 1]?.c;
-      const changeBps =
-        candles.length > 2 && first && latest && first > 0
+      const changeBps = asset
+        ? ctx.sim.changeBps(instrument.id)
+        : candles.length > 2 && first && latest && first > 0
           ? Math.round(((latest - first) / first) * 10_000)
           : null;
 
       out.push({
         id: instrument.id,
         symbol: instrument.symbol,
-        display: ctx.trading.displayName(instrument, league),
+        display: asset ? asset.symbol : ctx.trading.displayName(instrument, league),
+        // Nur Arena-Werte haben Namen, Farbe und Charakter - bei Krypto
+        // steht das Kuerzel fuer sich.
+        name: asset?.name ?? null,
+        blurb: asset?.blurb ?? null,
+        color: asset?.color ?? null,
+        event: asset?.event && asset.event.until > now() ? asset.event.headline : null,
         kind: instrument.kind,
         qtyStep: instrument.qtyStep.toString(),
         priceStep: instrument.priceStep.toString(),
@@ -115,6 +129,10 @@ export function registerTradeRoutes(app: FastifyInstance, ctx: Context): void {
     const interval = ['1m', '5m', '15m', '1h', '4h', '1d'].includes(String(query.interval))
       ? String(query.interval)
       : '1m';
+
+    if (instrument.priceSource === 'sim') {
+      return { candles: ctx.sim.candles(instrument.id), interval: '1m' };
+    }
 
     if (instrument.priceSource === 'amm') {
       // Coins haben keine Boersenhistorie - wir bauen die Kurve aus den

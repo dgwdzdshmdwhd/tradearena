@@ -54,6 +54,7 @@ import type { Db } from './db.js';
 import type { Hub } from './hub.js';
 import type { MarketFeed } from './market.js';
 import type { ReplayStore } from './replay.js';
+import type { SimMarket } from './simmarket.js';
 import {
   toAccount,
   toInstrument,
@@ -141,6 +142,7 @@ export class Trading {
     readonly replay: ReplayStore,
     readonly hub: Hub,
     readonly lock: Mutex,
+    readonly sim: SimMarket,
   ) {}
 
   // ---------------------------------------------------------------- Laden
@@ -196,6 +198,11 @@ export class Trading {
    * Replay-Ligen.
    */
   async quoteFor(instrument: Instrument, league: League): Promise<Quote | null> {
+    // Der Arena-Markt liegt im Arbeitsspeicher und bewegt sich jede Sekunde.
+    if (instrument.priceSource === 'sim') {
+      return this.sim.quote(instrument.id);
+    }
+
     if (instrument.priceSource === 'amm') {
       const coin = await this.coin(instrument.id);
       if (!coin || coin.status !== 'live') return null;
@@ -211,6 +218,10 @@ export class Trading {
   }
 
   volatilityFor(instrument: Instrument, league: League): number {
+    if (instrument.priceSource === 'sim') {
+      const candles = this.sim.candles(instrument.id);
+      return candles.length > 25 ? volFromCandles(candles) : 100;
+    }
     if (instrument.priceSource === 'amm') return 100;
     if (league.mode === 'timemachine') {
       const cursor = league.replayCursor ?? 0;
@@ -491,10 +502,12 @@ export class Trading {
       const qty = options.qtyOverride ?? rest;
       if (qty <= 0n) throw badRequest('Nichts mehr auszufuehren.');
 
-      // Coins laufen ueber ihren Pool, alles andere ueber den Marktkurs.
+      // Alles mit Liquiditaetspool - eigene Coins wie Arena-Werte - laeuft
+      // ueber die Kurve. Nur dort bewegt eine Order den Kurs, und genau das
+      // ist der Einfluss, den ein Spieler haben soll.
       const executed =
-        instrument.priceSource === 'amm'
-          ? await this.fillOnPool(instrument, side, qty)
+        instrument.priceSource === 'amm' || instrument.priceSource === 'sim'
+          ? await this.fillOnPool(instrument, side, qty, rules)
           : {
               fill: options.priceOverride
                 ? executeAtPrice(side, qty, options.priceOverride, rules, options.liquidity ?? 'maker')
@@ -651,21 +664,52 @@ export class Trading {
   }
 
   /**
-   * Ausfuehrung gegen den Liquiditaetspool eines selbst gestarteten Coins.
+   * Ausfuehrung gegen einen Liquiditaetspool.
    *
-   * Hier gibt es keinen Spread und kein Orderbuch - der Preis ergibt sich
-   * aus der Kurve. Wer viel kauft, treibt den Kurs selbst nach oben und
-   * zahlt genau dafuer.
+   * Zwei Faelle teilen sich diesen Weg: die selbst gestarteten Coins und die
+   * Werte des Arena-Marktes. Beide haben kein Orderbuch - der Preis ergibt
+   * sich aus der Kurve. Wer viel kauft, treibt den Kurs selbst nach oben und
+   * zahlt genau dafuer. Genau das ist der Einfluss, den man haben soll.
    */
   private async fillOnPool(
     instrument: Instrument,
     side: Side,
     qty: Qty,
+    rules: LeagueRules,
   ): Promise<{ fill: Fill }> {
-    const coin = await this.coin(instrument.id);
-    if (!coin || coin.status !== 'live') throw badRequest('Dieser Coin wird nicht mehr gehandelt.');
+    const isArena = instrument.priceSource === 'sim';
+    let pool: Pool;
 
-    const pool = toPool(coin);
+    if (isArena) {
+      const current = this.sim.pool(instrument.id);
+      if (!current) throw badRequest('Dieser Wert wird gerade nicht gehandelt.');
+      pool = current;
+    } else {
+      const coin = await this.coin(instrument.id);
+      if (!coin || coin.status !== 'live') {
+        throw badRequest('Dieser Coin wird nicht mehr gehandelt.');
+      }
+      pool = toPool(coin);
+    }
+
+    /** Den veraenderten Pool zurueckschreiben - je nach Herkunft woanders hin. */
+    const writeBack = async (reserveUsd: bigint, reserveTokens: bigint): Promise<void> => {
+      if (isArena) {
+        // Der Arbeitsspeicher ist im Betrieb die Wahrheit, die Datenbank
+        // bekommt es sofort mit: hier wechselt Geld den Besitzer.
+        this.sim.applyPool(instrument.id, { ...pool, reserveUsdCents: reserveUsd, reserveTokens });
+        await this.db.run(
+          'UPDATE sim_assets SET reserve_usd = ?, reserve_tokens = ?, updated_at = ? WHERE instrument_id = ?',
+          [reserveUsd.toString(), reserveTokens.toString(), now(), instrument.id],
+        );
+        return;
+      }
+
+      await this.db.run(
+        'UPDATE coins SET reserve_usd = ?, reserve_tokens = ? WHERE instrument_id = ?',
+        [reserveUsd.toString(), reserveTokens.toString(), instrument.id],
+      );
+    };
 
     if (side === 'buy') {
       if (qty >= pool.reserveTokens) throw badRequest('So viele Token hat der Pool nicht.');
@@ -680,41 +724,40 @@ export class Trading {
       const fee = divRound(net * BigInt(pool.feeBps), 10_000n - BigInt(pool.feeBps), 'ceil');
       const spend = net + fee;
 
-      await this.db.run('UPDATE coins SET reserve_usd = ?, reserve_tokens = ? WHERE instrument_id = ?', [
-        (pool.reserveUsdCents + spend).toString(),
-        tokensAfter.toString(),
-        instrument.id,
-      ]);
+      await writeBack(pool.reserveUsdCents + spend, tokensAfter);
 
+      // Die Liga-Gebuehr kommt obendrauf. Ohne sie waere Handeln auf dem
+      // Arena-Markt gratis - und damit waere haeufiges Hin und Her wieder
+      // kostenlos, obwohl genau das teuer sein soll.
+      const brokerFee = computeFeeCents(spend - fee, rules.fees, 'taker');
       const price = priceFromNotional(spend, qty, 'half_up');
+
       return {
         fill: {
           price,
           qty,
           grossCents: spend - fee,
-          feeCents: fee,
+          feeCents: fee + brokerFee,
           slippageCents: 0n,
-          cashDeltaCents: -spend,
+          cashDeltaCents: -(spend + brokerFee),
           liquidity: 'taker',
         },
       };
     }
 
     const result = ammSell(pool, qty);
-    await this.db.run('UPDATE coins SET reserve_usd = ?, reserve_tokens = ? WHERE instrument_id = ?', [
-      result.pool.reserveUsdCents.toString(),
-      result.pool.reserveTokens.toString(),
-      instrument.id,
-    ]);
+    await writeBack(result.pool.reserveUsdCents, result.pool.reserveTokens);
+
+    const brokerFee = computeFeeCents(result.proceedsCents, rules.fees, 'taker');
 
     return {
       fill: {
         price: result.avgPrice,
         qty,
         grossCents: result.proceedsCents + result.feeCents,
-        feeCents: result.feeCents,
+        feeCents: result.feeCents + brokerFee,
         slippageCents: 0n,
-        cashDeltaCents: result.proceedsCents,
+        cashDeltaCents: result.proceedsCents - brokerFee,
         liquidity: 'taker',
       },
     };

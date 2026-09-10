@@ -164,6 +164,10 @@ export function registerLeagueRoutes(app: FastifyInstance, ctx: Context): void {
       upgrades_allowed: flag(body.upgradesAllowed === undefined ? true : Boolean(body.upgradesAllowed)),
       survival_drawdown_bps: clamp(int(body.survivalDrawdownBps, 3_000), 500, 9_000),
       symbols: JSON.stringify(symbols),
+      // Der Arena-Markt ist der Standard: erfundene Werte, fuer alle gleich,
+      // und die eigenen Orders bewegen den Kurs. Die Zeitmaschine braucht
+      // dagegen zwingend echte Kurshistorie.
+      market: mode === 'timemachine' || body.market === 'crypto' ? 'crypto' : 'arena',
       created_at: at,
       starts_at: at,
       ends_at: mode === 'timemachine' ? null : at + durationMinutes * 60_000,
@@ -876,6 +880,7 @@ export function serialiseLeague(league: League): Record<string, unknown> {
     upgradesAllowed: league.upgradesAllowed,
     survivalDrawdownBps: league.survivalDrawdownBps,
     symbols: league.symbols,
+    market: league.market,
     startsAt: league.startsAt,
     endsAt: league.endsAt,
     finishedAt: league.finishedAt,

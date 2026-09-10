@@ -50,6 +50,7 @@ import {
   type OrderRow,
   type PositionRow,
 } from './rows.js';
+import type { SimMarket } from './simmarket.js';
 import { markFor, toPool, toPosition, type Trading } from './trading.js';
 import { big, bigOrNull, int, jsonParse, newId, now } from './util.js';
 
@@ -66,6 +67,7 @@ export class Engine {
     private readonly feed: MarketFeed,
     private readonly replay: ReplayStore,
     private readonly hub: Hub,
+    private readonly sim: SimMarket,
   ) {}
 
   start(): void {
@@ -150,7 +152,11 @@ export class Engine {
     for (const row of rows) {
       const instrument = toInstrument(row);
 
-      // Krypto: nur die Symbole, die in dieser Liga erlaubt sind.
+      // Jede Liga handelt entweder den Arena-Markt oder echte Krypto -
+      // nie beides. Sonst waeren die Ranglisten nicht vergleichbar.
+      if (instrument.kind === 'sim' && league.market !== 'arena') continue;
+      if (instrument.kind === 'crypto' && league.market !== 'crypto') continue;
+
       if (
         instrument.kind === 'crypto' &&
         league.symbols.length > 0 &&

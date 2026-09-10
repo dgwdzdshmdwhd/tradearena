@@ -6,6 +6,7 @@ import type { Engine } from './engine.js';
 import type { Hub } from './hub.js';
 import type { MarketFeed } from './market.js';
 import type { ReplayStore } from './replay.js';
+import type { SimMarket } from './simmarket.js';
 import type { Trading } from './trading.js';
 import { unauthorized } from './util.js';
 
@@ -16,6 +17,7 @@ export interface Context {
   feed: MarketFeed;
   replay: ReplayStore;
   hub: Hub;
+  sim: SimMarket;
 }
 
 /** Holt den angemeldeten Benutzer aus dem Cookie - oder wirft 401. */

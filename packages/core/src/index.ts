@@ -22,4 +22,5 @@ export * from './indicators.js';
 export * from './random.js';
 export * from './bots.js';
 export * from './achievements.js';
+export * from './simmarket.js';
 export * from './prestige.js';

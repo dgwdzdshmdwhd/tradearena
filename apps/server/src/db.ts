@@ -482,10 +482,59 @@ const SCHEMA: string[] = [
   )`,
 
   `CREATE UNIQUE INDEX IF NOT EXISTS bet_stakes_unique ON bet_stakes (bet_id, account_id)`,
+
+  // --- Arena-Markt: erfundene Werte, global fuer alle Ligen ---------------
+  `CREATE TABLE IF NOT EXISTS sim_assets (
+    instrument_id TEXT PRIMARY KEY,
+    symbol TEXT NOT NULL,
+    name TEXT NOT NULL,
+    blurb TEXT NOT NULL DEFAULT '',
+    color TEXT NOT NULL DEFAULT '#8ba3c7',
+    reserve_usd TEXT NOT NULL,
+    reserve_tokens TEXT NOT NULL,
+    drift_bps INTEGER NOT NULL DEFAULT 0,
+    vol_bps INTEGER NOT NULL DEFAULT 200,
+    event_key TEXT,
+    event_drift_bps INTEGER,
+    event_until BIGINT,
+    updated_at BIGINT NOT NULL
+  )`,
+
+  `CREATE TABLE IF NOT EXISTS sim_candles (
+    instrument_id TEXT NOT NULL,
+    t BIGINT NOT NULL,
+    o REAL NOT NULL,
+    h REAL NOT NULL,
+    l REAL NOT NULL,
+    c REAL NOT NULL,
+    v REAL NOT NULL DEFAULT 0,
+    PRIMARY KEY (instrument_id, t)
+  )`,
+];
+
+/**
+ * Nachtraegliche Spalten.
+ *
+ * `CREATE TABLE IF NOT EXISTS` aendert bestehende Tabellen nicht - fuer neue
+ * Spalten in einer schon laufenden Datenbank braucht es ALTER. Beide Treiber
+ * beschweren sich, wenn die Spalte schon da ist; genau deshalb steht hier ein
+ * try/catch statt einer Versionstabelle. Bei dieser Groessenordnung ist das
+ * ehrlicher als ein Migrationsframework.
+ */
+const MIGRATIONS: string[] = [
+  `ALTER TABLE leagues ADD COLUMN market TEXT NOT NULL DEFAULT 'arena'`,
 ];
 
 async function migrate(db: Db): Promise<void> {
   for (const statement of SCHEMA) {
     await db.run(statement);
+  }
+
+  for (const statement of MIGRATIONS) {
+    try {
+      await db.run(statement);
+    } catch {
+      // Spalte existiert bereits - genau der Normalfall bei jedem Neustart.
+    }
   }
 }

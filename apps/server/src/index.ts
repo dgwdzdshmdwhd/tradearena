@@ -21,6 +21,7 @@ import { Engine } from './engine.js';
 import { Hub } from './hub.js';
 import { MarketFeed } from './market.js';
 import { ReplayStore } from './replay.js';
+import { SimMarket } from './simmarket.js';
 import { registerAuthRoutes } from './routes/auth.js';
 import { registerLeagueRoutes } from './routes/leagues.js';
 import { registerTradeRoutes } from './routes/trade.js';
@@ -37,12 +38,37 @@ async function main(): Promise<void> {
   const replay = new ReplayStore(feed);
   const hub = new Hub();
   const lock = new Mutex();
-  const trading = new Trading(db, feed, replay, hub, lock);
-  const engine = new Engine(db, trading, feed, replay, hub);
+  const sim = new SimMarket(db, hub);
+  const trading = new Trading(db, feed, replay, hub, lock, sim);
+  const engine = new Engine(db, trading, feed, replay, hub, sim);
+
+  await sim.load();
+
+  /**
+   * Marktereignisse landen im Feed jeder laufenden Arena-Liga - und als
+   * Vollbild-Meldung bei allen, die gerade zuschauen. Ohne die Ankuendigung
+   * waere ein Ereignis nur ein Kurssprung, den man verpasst hat.
+   */
+  sim.onEvent = (asset, headline, up) => {
+    void (async () => {
+      const leagues = await db.all<{ id: string }>(
+        "SELECT id FROM leagues WHERE status = 'running' AND market <> 'crypto'",
+      );
+
+      for (const league of leagues) {
+        hub.broadcastLeague(league.id, 'market_event', {
+          symbol: asset.symbol,
+          name: asset.name,
+          headline,
+          up,
+        });
+      }
+    })();
+  };
 
   hub.memberCheck = (userId, leagueId) => trading.isMember(userId, leagueId);
 
-  const ctx: Context = { db, trading, engine, feed, replay, hub };
+  const ctx: Context = { db, trading, engine, feed, replay, hub, sim };
 
   await seedInstruments(ctx);
 
@@ -151,6 +177,7 @@ async function main(): Promise<void> {
   });
 
   feed.start();
+  sim.start();
   engine.start();
 
   if (config.sessionSecretIsGenerated) {
@@ -162,6 +189,7 @@ async function main(): Promise<void> {
   const shutdown = async (): Promise<void> => {
     console.log('\n[server] fahre herunter ...');
     engine.stop();
+    sim.stop();
     feed.stop();
     await app.close();
     await db.close();

@@ -33,6 +33,7 @@ export interface LeagueRow {
   upgrades_allowed: number;
   survival_drawdown_bps: number;
   symbols: string;
+  market: string;
   created_at: number;
   starts_at: number;
   ends_at: number | null;
@@ -66,6 +67,7 @@ export interface League {
   upgradesAllowed: boolean;
   survivalDrawdownBps: number;
   symbols: string[];
+  market: 'arena' | 'crypto';
   createdAt: number;
   startsAt: number;
   endsAt: number | null;
@@ -108,6 +110,7 @@ export function toLeague(row: LeagueRow): League {
     upgradesAllowed: bool(row.upgrades_allowed),
     survivalDrawdownBps: int(row.survival_drawdown_bps, 3_000),
     symbols: jsonParse<string[]>(row.symbols, []),
+    market: row.market === 'crypto' ? 'crypto' : 'arena',
     createdAt: int(row.created_at),
     startsAt: int(row.starts_at),
     endsAt: row.ends_at === null ? null : int(row.ends_at),
@@ -200,8 +203,8 @@ export interface Instrument {
   leagueId: string | null;
   symbol: string;
   display: string;
-  kind: 'crypto' | 'coin';
-  priceSource: 'external' | 'amm';
+  kind: 'crypto' | 'coin' | 'sim';
+  priceSource: 'external' | 'amm' | 'sim';
   qtyStep: bigint;
   priceStep: bigint;
   minNotional: bigint;
@@ -214,8 +217,8 @@ export function toInstrument(row: InstrumentRow): Instrument {
     leagueId: row.league_id,
     symbol: row.symbol,
     display: row.display,
-    kind: row.kind as 'crypto' | 'coin',
-    priceSource: row.price_source as 'external' | 'amm',
+    kind: row.kind as 'crypto' | 'coin' | 'sim',
+    priceSource: row.price_source as 'external' | 'amm' | 'sim',
     qtyStep: big(row.qty_step),
     priceStep: big(row.price_step),
     minNotional: big(row.min_notional),
