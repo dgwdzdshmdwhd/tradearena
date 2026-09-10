@@ -23,8 +23,9 @@ services:
     startCommand: npm start
     healthCheckPath: /healthz
     envVars:
-      - key: NODE_VERSION
-        value: 24.9.0
+      # Bewusst KEINE feste Node-Version: eine Version, die es auf Render
+      # nicht gibt, laesst den Deploy sofort scheitern. Die Anforderung steht
+      # in package.json unter "engines", das reicht.
       - key: NODE_ENV
         value: production
       # Wird von Render automatisch erzeugt - niemand muss ihn kennen.

@@ -91,12 +91,21 @@ async function createSqlite(path: string): Promise<Db> {
 
 async function createPostgres(url: string): Promise<Db> {
   const pg = await import('pg');
+  /**
+   * SSL nur, wenn die Verbindungszeichenkette es ausdruecklich verlangt.
+   *
+   * Anbieter wie Neon oder Supabase haengen `sslmode=require` an - dort ist
+   * SSL Pflicht. Die interne Verbindung innerhalb eines Rechenzentrums
+   * (z. B. Render zwischen Dienst und Datenbank) laeuft dagegen ohne, und
+   * ein erzwungenes SSL wuerde sie mit "server does not support SSL"
+   * abbrechen lassen.
+   */
+  const wantsSsl = /sslmode=(require|verify-ca|verify-full)/.test(url);
+
   const pool = new pg.default.Pool({
     connectionString: url,
     max: 8,
-    ssl: url.includes('localhost') || url.includes('sslmode=disable')
-      ? undefined
-      : { rejectUnauthorized: false },
+    ...(wantsSsl ? { ssl: { rejectUnauthorized: false } } : {}),
   });
 
   // Postgres liefert BIGINT und NUMERIC als String - genau so wollen wir es.
