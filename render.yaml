@@ -16,7 +16,10 @@ services:
     runtime: node
     plan: free
     region: frankfurt
-    buildCommand: npm install && npm run build
+    # --include=dev ist hier zwingend: weiter unten steht NODE_ENV=production,
+    # und dann laesst npm die devDependencies weg. Vite und Tailwind stehen
+    # aber genau dort - ohne sie gibt es kein Frontend zu bauen.
+    buildCommand: npm install --include=dev && npm run build
     startCommand: npm start
     healthCheckPath: /healthz
     envVars:
