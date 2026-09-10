@@ -1,0 +1,195 @@
+/**
+ * TradeArena - Serverstart.
+ *
+ * Ein einziger Prozess macht alles: HTTP-API, WebSocket-Verteilung, Preis-Feed
+ * und die Engine-Schleife. Genau deshalb laesst sich das Ganze kostenlos auf
+ * einem einzigen kleinen Dienst betreiben - und lokal mit einem Befehl starten.
+ */
+
+import { existsSync } from 'node:fs';
+import { dirname, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+import fastifyCookie from '@fastify/cookie';
+import fastifyStatic from '@fastify/static';
+import Fastify from 'fastify';
+
+import { config } from './config.js';
+import type { Context } from './context.js';
+import { openDatabase } from './db.js';
+import { Engine } from './engine.js';
+import { Hub } from './hub.js';
+import { MarketFeed } from './market.js';
+import { ReplayStore } from './replay.js';
+import { registerAuthRoutes } from './routes/auth.js';
+import { registerLeagueRoutes } from './routes/leagues.js';
+import { registerTradeRoutes } from './routes/trade.js';
+import { Trading } from './trading.js';
+import { HttpError, Mutex, newId, now } from './util.js';
+
+const here = dirname(fileURLToPath(import.meta.url));
+
+async function main(): Promise<void> {
+  const db = await openDatabase();
+  console.log(`[db] ${db.dialect === 'sqlite' ? `SQLite (${config.sqlitePath})` : 'Postgres'}`);
+
+  const feed = new MarketFeed(config.symbols);
+  const replay = new ReplayStore(feed);
+  const hub = new Hub();
+  const lock = new Mutex();
+  const trading = new Trading(db, feed, replay, hub, lock);
+  const engine = new Engine(db, trading, feed, replay, hub);
+
+  hub.memberCheck = (userId, leagueId) => trading.isMember(userId, leagueId);
+
+  const ctx: Context = { db, trading, engine, feed, replay, hub };
+
+  await seedInstruments(ctx);
+
+  const app = Fastify({
+    logger: false,
+    bodyLimit: 512 * 1024,
+    trustProxy: true,
+  });
+
+  await app.register(fastifyCookie);
+
+  /**
+   * Sicherheitsnetz: `JSON.stringify` kann mit bigint nicht umgehen und wirft
+   * eine Ausnahme. Da im ganzen Projekt Geld als bigint gerechnet wird,
+   * wandeln wir vor dem Serialisieren stumpf alles um, was durchgerutscht ist.
+   */
+  app.addHook('preSerialization', async (_request, _reply, payload) => stringifyBigInts(payload));
+
+  app.setErrorHandler((error, _request, reply) => {
+    if (error instanceof HttpError) {
+      void reply.status(error.statusCode).send({ error: error.message });
+      return;
+    }
+    console.error('[http]', error);
+    void reply.status(500).send({ error: 'Da ist auf dem Server etwas schiefgelaufen.' });
+  });
+
+  app.get('/healthz', async () => ({
+    ok: true,
+    feed: feed.status,
+    connections: hub.connections,
+    at: now(),
+  }));
+
+  registerAuthRoutes(app, ctx);
+  registerLeagueRoutes(app, ctx);
+  registerTradeRoutes(app, ctx);
+
+  // Gebautes Frontend ausliefern, wenn vorhanden. Im Entwicklungsmodus
+  // uebernimmt das Vite auf Port 5173.
+  const webRoot = config.webRoot ?? resolve(here, '../../web/dist');
+  if (existsSync(webRoot)) {
+    await app.register(fastifyStatic, { root: webRoot, wildcard: false });
+
+    // Alles, was keine API-Route und keine Datei ist, bekommt die
+    // Single-Page-App.
+    app.setNotFoundHandler((request, reply) => {
+      if (request.url.startsWith('/api/')) {
+        void reply.status(404).send({ error: 'Unbekannter Endpunkt.' });
+        return;
+      }
+
+      // Fehlende Dateien bleiben 404. Sonst bekaeme ein Browser, der nach
+      // einem Deploy noch die alte JavaScript-Datei anfragt, HTML zurueck -
+      // und zeigt dann eine weisse Seite statt sich neu zu laden.
+      if (/\.[a-z0-9]{2,5}$/i.test(request.url.split('?')[0] ?? '')) {
+        void reply.status(404).send({ error: 'Datei nicht gefunden.' });
+        return;
+      }
+
+      void reply.sendFile('index.html');
+    });
+    console.log(`[web] liefere ${webRoot}`);
+  } else {
+    console.log('[web] kein Build gefunden - im Entwicklungsmodus laeuft Vite auf Port 5173');
+  }
+
+  await app.listen({ port: config.port, host: config.host });
+  console.log(`[http] laeuft auf http://localhost:${config.port}`);
+
+  // WebSocket-Upgrades an den Hub weiterreichen.
+  app.server.on('upgrade', (request, socket, head) => {
+    if (request.url?.startsWith('/ws')) {
+      hub.handleUpgrade(request, socket, head);
+    } else {
+      socket.destroy();
+    }
+  });
+
+  feed.start();
+  engine.start();
+
+  if (config.sessionSecretIsGenerated) {
+    console.warn(
+      '[auth] SESSION_SECRET ist nicht gesetzt - nach einem Neustart muessen sich alle neu anmelden.',
+    );
+  }
+
+  const shutdown = async (): Promise<void> => {
+    console.log('\n[server] fahre herunter ...');
+    engine.stop();
+    feed.stop();
+    await app.close();
+    await db.close();
+    process.exit(0);
+  };
+
+  process.on('SIGINT', () => void shutdown());
+  process.on('SIGTERM', () => void shutdown());
+}
+
+/**
+ * Die handelbaren Krypto-Instrumente anlegen. Laeuft bei jedem Start und
+ * ergaenzt nur, was noch fehlt.
+ */
+async function seedInstruments(ctx: Context): Promise<void> {
+  const at = now();
+
+  for (const symbol of config.symbols) {
+    const existing = await ctx.db.get('SELECT id FROM instruments WHERE symbol = ? AND league_id IS NULL', [
+      symbol,
+    ]);
+    if (existing) continue;
+
+    const base = symbol.replace(/USDT$/, '');
+    await ctx.db.run(
+      `INSERT INTO instruments (id, league_id, symbol, display, kind, price_source,
+                                qty_step, price_step, min_notional, active, created_at)
+       VALUES (?, NULL, ?, ?, 'crypto', 'external', ?, '1000000', '100', 1, ?)`,
+      [newId(), symbol, `${base}/USD`, stepFor(symbol), at],
+    );
+  }
+}
+
+function stringifyBigInts(value: unknown): unknown {
+  if (typeof value === 'bigint') return value.toString();
+  if (Array.isArray(value)) return value.map(stringifyBigInts);
+  if (value !== null && typeof value === 'object') {
+    if (value instanceof Date) return value;
+    const out: Record<string, unknown> = {};
+    for (const [key, entry] of Object.entries(value as Record<string, unknown>)) {
+      out[key] = stringifyBigInts(entry);
+    }
+    return out;
+  }
+  return value;
+}
+
+/** Sinnvolle Lot-Groessen: bei BTC feiner als bei DOGE. */
+function stepFor(symbol: string): string {
+  if (symbol.startsWith('BTC')) return '1000'; // 0,00001
+  if (symbol.startsWith('ETH') || symbol.startsWith('BNB')) return '10000';
+  if (symbol.startsWith('PEPE') || symbol.startsWith('DOGE')) return '10000000'; // 0,1
+  return '100000'; // 0,001
+}
+
+main().catch((error: unknown) => {
+  console.error('[server] Start fehlgeschlagen:', error);
+  process.exit(1);
+});

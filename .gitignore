@@ -1,0 +1,20 @@
+node_modules/
+.next/
+dist/
+build/
+out/
+coverage/
+
+# Umgebungsvariablen: NIEMALS committen. Vorlage ist .env.example
+.env
+.env.local
+.env.*.local
+!.env.example
+
+*.log
+npm-debug.log*
+.DS_Store
+Thumbs.db
+.vercel
+.turbo
+*.tsbuildinfo

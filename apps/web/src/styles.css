@@ -1,0 +1,411 @@
+@import 'tailwindcss';
+
+/* Schriften liegen lokal im Projekt - kein CDN, kein Nachladen, kein Springen. */
+@import '@fontsource-variable/inter';
+@import '@fontsource/ibm-plex-mono/400.css';
+@import '@fontsource/ibm-plex-mono/500.css';
+@import '@fontsource/ibm-plex-mono/600.css';
+
+/* ===========================================================================
+   TradeArena - Designsystem
+
+   Haltung: ein Werkzeug, kein Spielzeug. Dichte Information, ruhige Flaechen,
+   genau ein Akzent. Farbe wird ausschliesslich fuer Bedeutung eingesetzt -
+   gruen und rot heissen Gewinn und Verlust, sonst nichts. Alles andere ist
+   Grauwert.
+
+   Keine Emojis. Ikonografie ist ein eigener SVG-Satz mit einheitlicher
+   Strichstaerke (Icon.tsx).
+   =========================================================================== */
+
+@theme {
+  /* --- Flaechen: warmes Anthrazit statt Schwarz. Schwarz wirkt billig und
+         erzeugt auf OLED harte Kanten. --- */
+  --color-bg: #0a0c0f;
+  --color-surface: #101318;
+  --color-raised: #161a20;
+  --color-overlay: #1b2027;
+
+  /* --- Linien: zwei Staerken reichen fuer jede Trennung --- */
+  --color-hairline: #1c2128;
+  --color-border: #262d36;
+
+  /* --- Text: drei Stufen, mehr braucht keine Oberflaeche --- */
+  --color-fg: #e9edf3;
+  --color-fg-2: #9aa4b2;
+  --color-fg-3: #646e7d;
+
+  /* --- Bedeutung --- */
+  --color-up: #31c48d;
+  --color-up-dim: #1b3f33;
+  --color-down: #f05252;
+  --color-down-dim: #43242a;
+  --color-accent: #d4a24c;
+  --color-accent-dim: #3a2f1c;
+  --color-info: #5b8def;
+
+  --font-sans: 'Inter Variable', 'Inter', ui-sans-serif, system-ui, -apple-system,
+    'Segoe UI', sans-serif;
+  --font-mono: 'IBM Plex Mono', ui-monospace, 'SF Mono', 'Cascadia Mono', monospace;
+
+  --radius: 6px;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  background: var(--color-bg);
+  color: var(--color-fg);
+  font-family: var(--font-sans);
+  font-size: 13px;
+  line-height: 1.45;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+  overscroll-behavior: none;
+}
+
+/* Alle Zahlen: feste Ziffernbreite. Ohne das zappelt jede Rangliste bei
+   jedem Kurstick, und das Auge kann Spalten nicht mehr vergleichen. */
+.num {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: 'zero' 1;
+  letter-spacing: -0.01em;
+}
+
+/* --- Flaechen ------------------------------------------------------------ */
+
+.panel {
+  background: var(--color-surface);
+  border: 1px solid var(--color-hairline);
+  border-radius: var(--radius);
+}
+
+.panel-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  height: 32px;
+  padding: 0 10px;
+  border-bottom: 1px solid var(--color-hairline);
+  font-size: 10px;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.09em;
+  color: var(--color-fg-3);
+  flex-shrink: 0;
+}
+
+/* --- Bedienelemente ------------------------------------------------------ */
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  height: 30px;
+  padding: 0 12px;
+  border: 1px solid var(--color-border);
+  background: var(--color-raised);
+  color: var(--color-fg);
+  border-radius: var(--radius);
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  white-space: nowrap;
+  transition:
+    background 0.12s ease,
+    border-color 0.12s ease,
+    color 0.12s ease;
+}
+.btn:hover:not(:disabled) {
+  background: var(--color-overlay);
+  border-color: var(--color-fg-3);
+}
+.btn:active:not(:disabled) {
+  transform: translateY(0.5px);
+}
+.btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.btn-sm {
+  height: 24px;
+  padding: 0 8px;
+  font-size: 11px;
+}
+
+.btn-ghost {
+  background: transparent;
+  border-color: transparent;
+  color: var(--color-fg-2);
+}
+.btn-ghost:hover:not(:disabled) {
+  background: var(--color-raised);
+  border-color: var(--color-hairline);
+  color: var(--color-fg);
+}
+
+.btn-primary {
+  background: var(--color-accent);
+  border-color: var(--color-accent);
+  color: #17130a;
+  font-weight: 600;
+}
+.btn-primary:hover:not(:disabled) {
+  background: #e0b160;
+  border-color: #e0b160;
+}
+
+.btn-buy {
+  background: color-mix(in srgb, var(--color-up) 14%, transparent);
+  border-color: color-mix(in srgb, var(--color-up) 45%, transparent);
+  color: var(--color-up);
+  font-weight: 600;
+}
+.btn-buy:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--color-up) 24%, transparent);
+  border-color: var(--color-up);
+}
+
+.btn-sell {
+  background: color-mix(in srgb, var(--color-down) 14%, transparent);
+  border-color: color-mix(in srgb, var(--color-down) 45%, transparent);
+  color: var(--color-down);
+  font-weight: 600;
+}
+.btn-sell:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--color-down) 24%, transparent);
+  border-color: var(--color-down);
+}
+
+.input {
+  width: 100%;
+  height: 30px;
+  background: var(--color-bg);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  padding: 0 9px;
+  color: var(--color-fg);
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+  outline: none;
+  transition: border-color 0.12s ease;
+}
+.input::placeholder {
+  color: var(--color-fg-3);
+}
+.input:focus {
+  border-color: var(--color-fg-3);
+  box-shadow: 0 0 0 3px rgb(255 255 255 / 4%);
+}
+select.input,
+textarea.input {
+  font-family: var(--font-sans);
+}
+textarea.input {
+  height: auto;
+  padding: 7px 9px;
+  line-height: 1.5;
+}
+
+/* Sichtbarer Fokus fuer Tastaturbedienung - fehlt in den meisten
+   Terminal-Oberflaechen und macht sie unbenutzbar ohne Maus. */
+:focus-visible {
+  outline: 1px solid var(--color-fg-3);
+  outline-offset: 1px;
+}
+
+.label {
+  display: block;
+  margin-bottom: 4px;
+  font-size: 10px;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--color-fg-3);
+}
+
+/* --- Bedeutungsfarben ---------------------------------------------------- */
+
+.up {
+  color: var(--color-up);
+}
+.down {
+  color: var(--color-down);
+}
+.dim {
+  color: var(--color-fg-2);
+}
+.dimmer {
+  color: var(--color-fg-3);
+}
+.accent {
+  color: var(--color-accent);
+}
+
+/* --- Tabellen ------------------------------------------------------------ */
+
+.tbl {
+  width: 100%;
+  border-collapse: collapse;
+}
+.tbl thead th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: var(--color-surface);
+  padding: 6px 10px;
+  font-size: 10px;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: var(--color-fg-3);
+  text-align: left;
+  border-bottom: 1px solid var(--color-hairline);
+}
+.tbl tbody td {
+  padding: 7px 10px;
+  border-bottom: 1px solid var(--color-hairline);
+  font-size: 12.5px;
+}
+.tbl tbody tr:last-child td {
+  border-bottom: 0;
+}
+.tbl tbody tr:hover {
+  background: var(--color-raised);
+}
+.tbl .r {
+  text-align: right;
+}
+
+/* --- Bewegung: sparsam und kurz ------------------------------------------ */
+
+@keyframes flash-up {
+  from {
+    background-color: color-mix(in srgb, var(--color-up) 26%, transparent);
+  }
+  to {
+    background-color: transparent;
+  }
+}
+@keyframes flash-down {
+  from {
+    background-color: color-mix(in srgb, var(--color-down) 26%, transparent);
+  }
+  to {
+    background-color: transparent;
+  }
+}
+.flash-up {
+  animation: flash-up 0.4s ease-out;
+}
+.flash-down {
+  animation: flash-down 0.4s ease-out;
+}
+
+@keyframes enter {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.enter {
+  animation: enter 0.18s ease-out;
+}
+
+@keyframes shake {
+  10%,
+  90% {
+    transform: translateX(-1px);
+  }
+  20%,
+  80% {
+    transform: translateX(2px);
+  }
+  30%,
+  50%,
+  70% {
+    transform: translateX(-5px);
+  }
+  40%,
+  60% {
+    transform: translateX(5px);
+  }
+}
+.shake {
+  animation: shake 0.55s;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* --- Scrollbalken: schmal und unauffaellig -------------------------------- */
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-border) transparent;
+}
+::-webkit-scrollbar {
+  width: 7px;
+  height: 7px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--color-border);
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--color-fg-3);
+}
+
+/* --- Kleinteile ---------------------------------------------------------- */
+
+/* Statuspunkt (Feed live / Simulator / getrennt) */
+.dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+/* Duenner Fortschrittsbalken */
+.meter {
+  height: 3px;
+  border-radius: 2px;
+  background: var(--color-raised);
+  overflow: hidden;
+}
+.meter > i {
+  display: block;
+  height: 100%;
+  border-radius: 2px;
+  background: var(--color-accent);
+}
+
+/* Tabellarische Kennzahl im Kopfbereich */
+.stat-label {
+  font-size: 9.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.09em;
+  color: var(--color-fg-3);
+}

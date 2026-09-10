@@ -1,0 +1,40 @@
+# Render-Blueprint fuer TradeArena.
+#
+# Damit muss man auf render.com nichts von Hand einstellen: "New" ->
+# "Blueprint" -> Repository auswaehlen. Render liest diese Datei und legt
+# Webdienst und Datenbank an.
+#
+# Beide sind im kostenlosen Tarif. Zwei Dinge musst du wissen:
+#   1. Der Webdienst schlaeft nach 15 Minuten ohne Aufrufe ein. Der Cron-Ping
+#      aus DEPLOY.md haelt ihn wach.
+#   2. Die kostenlose Postgres-Datenbank laeuft nach 30 Tagen ab. Render
+#      erinnert dich per Mail; eine neue anlegen dauert zwei Minuten.
+
+services:
+  - type: web
+    name: tradearena
+    runtime: node
+    plan: free
+    region: frankfurt
+    buildCommand: npm install && npm run build
+    startCommand: npm start
+    healthCheckPath: /healthz
+    envVars:
+      - key: NODE_VERSION
+        value: 24.9.0
+      - key: NODE_ENV
+        value: production
+      # Wird von Render automatisch erzeugt - niemand muss ihn kennen.
+      - key: SESSION_SECRET
+        generateValue: true
+      - key: DATABASE_URL
+        fromDatabase:
+          name: tradearena-db
+          property: connectionString
+      - key: BINANCE_SYMBOLS
+        value: BTCUSDT,ETHUSDT,SOLUSDT,XRPUSDT,DOGEUSDT,ADAUSDT,AVAXUSDT,LINKUSDT,PEPEUSDT,BNBUSDT
+
+databases:
+  - name: tradearena-db
+    plan: free
+    region: frankfurt

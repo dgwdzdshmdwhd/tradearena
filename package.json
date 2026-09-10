@@ -1,0 +1,28 @@
+{
+  "name": "tradearena",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "workspaces": [
+    "packages/*",
+    "apps/*"
+  ],
+  "scripts": {
+    "dev": "concurrently -n server,web -c cyan,magenta \"npm:dev:server\" \"npm:dev:web\"",
+    "dev:server": "npm run dev --workspace @tradearena/server",
+    "dev:web": "npm run dev --workspace @tradearena/web",
+    "build": "npm run build --workspace @tradearena/web",
+    "start": "npm run start --workspace @tradearena/server",
+    "test": "vitest run --root packages/core",
+    "test:watch": "vitest --root packages/core",
+    "typecheck": "tsc -b --pretty"
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.2",
+    "typescript": "^5.7.3",
+    "vitest": "^3.0.5"
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}
