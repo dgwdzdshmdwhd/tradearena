@@ -16,20 +16,28 @@ services:
     runtime: node
     plan: free
     region: frankfurt
-    # Zwei Fallstricke stecken in dieser einen Zeile:
+    # Drei Fallstricke stecken in dieser einen Zeile. Alle drei haben hier
+    # schon einen Deploy gekostet:
     #
-    # 1. `rm -f package-lock.json`: Die Lockfile entsteht auf einem
+    # 1. `rm -rf node_modules`: Render stellt zwischen Builds einen Cache
+    #    wieder her. Findet npm darin einen scheinbar fertigen Baum, tut es
+    #    praktisch nichts ("removed 1 package in 541ms") - und die fehlenden
+    #    Linux-Binaerdateien bleiben fehlend. Ohne dieses rm laeuft der Build
+    #    genau einmal durch, naemlich beim allerersten Mal ohne Cache.
+    #
+    # 2. `rm -f package-lock.json`: Die Lockfile entsteht auf einem
     #    Windows-Rechner. npm installiert danach auf Linux zwar nach Lockfile,
     #    laesst aber die plattformabhaengigen Binaerpakete weg (lightningcss,
-    #    esbuild, rollup) - obwohl deren Linux-Eintraege in der Lockfile
-    #    stehen. Der Build stirbt dann mit "Cannot find module
-    #    ../lightningcss.linux-x64-gnu.node". Bekannter npm-Fehler, und der
-    #    empfohlene Ausweg ist genau dieser: ohne Lockfile aufloesen lassen.
+    #    esbuild, rollup) - obwohl deren Linux-Eintraege darin stehen.
     #
-    # 2. `--include=dev`: Weiter unten steht NODE_ENV=production, und dann
+    # 3. `--include=dev`: Weiter unten steht NODE_ENV=production, und dann
     #    laesst npm die devDependencies weg. Vite und Tailwind stehen aber
     #    genau dort.
-    buildCommand: rm -f package-lock.json && npm install --include=dev --no-audit --no-fund && npm run build
+    buildCommand: >-
+      rm -rf node_modules apps/web/node_modules apps/server/node_modules
+      packages/core/node_modules package-lock.json &&
+      npm install --include=dev --no-audit --no-fund &&
+      npm run build
     startCommand: npm start
     healthCheckPath: /healthz
     envVars:
