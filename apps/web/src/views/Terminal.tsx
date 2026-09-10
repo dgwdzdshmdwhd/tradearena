@@ -435,9 +435,17 @@ export function Terminal({ me, leagueId }: { me: Me; leagueId: string }): JSX.El
         </div>
 
         <div className="mt-2 flex items-center gap-4">
-          <Status tone={feedStatus === 'live' ? 'live' : 'warn'}>
-            {feedStatus === 'live' ? 'Kurse live von der Boerse' : 'Ersatzkurse - Boerse nicht erreichbar'}
-          </Status>
+          {/* In der Arena kommen die Kurse aus dem Spiel selbst - die Anzeige
+              "live von der Boerse" waere dort schlicht gelogen. */}
+          {league.market === 'arena' ? (
+            <Status tone="live">Arena-Kurse - fuer alle gleich</Status>
+          ) : (
+            <Status tone={feedStatus === 'live' ? 'live' : 'warn'}>
+              {feedStatus === 'live'
+                ? 'Kurse live von der Boerse'
+                : 'Ersatzkurse - Boerse nicht erreichbar'}
+            </Status>
+          )}
           <span className="num dimmer text-[12px] tracking-[0.08em]">{league.inviteCode}</span>
         </div>
       </header>

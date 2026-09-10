@@ -609,6 +609,10 @@ export class Engine {
     if (league.mode === 'timemachine') {
       return this.replay.candlesUpTo(league.id, instrument.symbol, league.replayCursor ?? 0);
     }
+    // Arena-Werte haben ihre eigene Historie. Frueher lief das hier auf den
+    // Boersen-Feed, der ein Symbol wie ANKR gar nicht kennt - die Bots kamen
+    // damit nie ueber die Mindestzahl an Kerzen und handelten nie.
+    if (instrument.priceSource === 'sim') return this.sim.candles(instrument.id);
     return this.feed.candles(instrument.symbol);
   }
 

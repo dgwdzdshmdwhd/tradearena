@@ -19,6 +19,7 @@
 
 import {
   EVENTS,
+  FACTOR_SCALE,
   SIM_ASSETS,
   applyFactor,
   createRng,
@@ -45,6 +46,18 @@ const PERSIST_MS = 15_000;
 const MAX_CANDLES = 600;
 /** Wahrscheinlichkeit je Minute und Wert, dass ein Ereignis eintritt. */
 const EVENT_CHANCE_PER_MINUTE = 0.035;
+/**
+ * Wie viele Minuten Vorgeschichte ein neuer Wert bekommt.
+ *
+ * Ein Chart, der bei der ersten Kerze anfaengt, sieht kaputt aus, und die
+ * Bots ruehren sich erst ab dreissig Kerzen - ohne Vorgeschichte stuende ein
+ * frisch gekaufter Bot eine halbe Stunde still. Erfunden ist diese
+ * Vergangenheit nicht mehr als der Rest dieses Marktes: Sie entsteht aus
+ * derselben Rechnung, wird einmal gespeichert und ist danach fuer alle
+ * dieselbe. (Bei echten Boersenkursen waere das eine Faelschung - dort wird
+ * nichts erfunden.)
+ */
+const BACKFILL_MINUTES = 180;
 
 export interface SimAssetState {
   instrumentId: string;
@@ -154,6 +167,18 @@ export class SimMarket {
         [instrument.id],
       );
 
+      const history =
+        candles.length > 0
+          ? candles.map((candle) => ({
+              t: int(candle.t),
+              o: Number(candle.o),
+              h: Number(candle.h),
+              l: Number(candle.l),
+              c: Number(candle.c),
+              v: Number(candle.v),
+            }))
+          : await this.backfill(instrument.id, def.symbol, pool, def.params, at);
+
       this.assets.set(instrument.id, {
         instrumentId: instrument.id,
         symbol: def.symbol,
@@ -171,14 +196,7 @@ export class SimMarket {
                 until: int(state.event_until),
               }
             : null,
-        candles: candles.map((candle) => ({
-          t: int(candle.t),
-          o: Number(candle.o),
-          h: Number(candle.h),
-          l: Number(candle.l),
-          c: Number(candle.c),
-          v: Number(candle.v),
-        })),
+        candles: history,
         openOfDay: 0,
       });
     }
@@ -246,6 +264,59 @@ export class SimMarket {
     };
 
     this.onEvent?.(asset, headline, template.driftBpsPerMin > 0);
+  }
+
+  /**
+   * Erfindet einem neuen Wert eine Vergangenheit - rueckwaerts gerechnet, damit
+   * die letzte Kerze genau auf dem Kurs endet, den der Pool gerade hat.
+   */
+  private async backfill(
+    instrumentId: string,
+    symbol: string,
+    pool: Pool,
+    params: SimParams,
+    at: number,
+  ): Promise<Candle[]> {
+    const current = Number(poolPrice(pool)) / 1e8;
+    if (!Number.isFinite(current) || current <= 0) return [];
+
+    const rng = createRng(seedFrom(`${symbol}:historie`));
+    const scale = Number(FACTOR_SCALE);
+
+    const closes = [current];
+    for (let step = 0; step < BACKFILL_MINUTES; step += 1) {
+      const factor = Number(stepFactor(rng, params, 60_000)) / scale;
+      const previous = closes[closes.length - 1]! / (factor > 0 ? factor : 1);
+      closes.push(Number.isFinite(previous) && previous > 0 ? previous : current);
+    }
+    closes.reverse();
+
+    const minute = Math.floor(at / 60_000) * 60_000;
+    const candles: Candle[] = closes.map((close, index) => {
+      const open = index === 0 ? close : closes[index - 1]!;
+      const docht = Math.abs(close - open) * 0.6 + close * 0.0008;
+
+      return {
+        t: minute - (closes.length - 1 - index) * 60_000,
+        o: open,
+        h: Math.max(open, close) + docht,
+        l: Math.max(close * 0.5, Math.min(open, close) - docht),
+        c: close,
+        v: 0,
+      };
+    });
+
+    // Die letzte Kerze laeuft noch - die schreibt der normale Takt.
+    for (const candle of candles.slice(0, -1)) {
+      await this.db.run(
+        `INSERT INTO sim_candles (instrument_id, t, o, h, l, c, v)
+         VALUES (?, ?, ?, ?, ?, ?, ?)
+         ON CONFLICT (instrument_id, t) DO NOTHING`,
+        [instrumentId, candle.t, candle.o, candle.h, candle.l, candle.c, candle.v],
+      );
+    }
+
+    return candles;
   }
 
   private updateCandle(asset: SimAssetState, at: number): void {
