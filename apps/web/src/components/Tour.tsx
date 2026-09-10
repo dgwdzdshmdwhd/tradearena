@@ -67,6 +67,14 @@ const STEPS: Step[] = [
     place: 'left',
   },
   {
+    // Nur auf dem Handy sichtbar - auf dem Rechner faellt der Schritt weg.
+    target: 'tabs',
+    icon: 'list',
+    title: 'Die vier Bereiche',
+    body: 'Chart zeigt den Kurs, Handeln ist dein Orderfenster, Depot deine Positionen, Liga die Rangliste und den Chat.',
+    place: 'top',
+  },
+  {
     target: 'desk',
     icon: 'sliders',
     title: 'Dein Fortschritt',
@@ -87,7 +95,7 @@ export function Tour({ onClose }: { onClose: () => void }): JSX.Element | null {
   const [rect, setRect] = useState<Rect | null>(null);
 
   // Auf dem Handy ist immer nur ein Bereich sichtbar. Schritte auf Ziele, die
-  // es dort gar nicht gibt, werden weggelassen - eine Fuehrung, die ins Leere
+  // dort nichts anzeigen, werden weggelassen - eine Fuehrung, die ins Leere
   // zeigt, ist schlimmer als keine.
   //
   // Gewartet wird, bis ueberhaupt etwas da ist: Beim ersten Aufbau steht das
@@ -98,9 +106,7 @@ export function Tour({ onClose }: { onClose: () => void }): JSX.Element | null {
     if (steps) return;
 
     const look = (): Step[] | null => {
-      const present = STEPS.filter((entry) =>
-        document.querySelector(`[data-tour="${entry.target}"]`),
-      );
+      const present = STEPS.filter((entry) => visibleTarget(entry.target));
       return present.length > 0 ? present : null;
     };
 
@@ -134,16 +140,7 @@ export function Tour({ onClose }: { onClose: () => void }): JSX.Element | null {
   useLayoutEffect(() => {
     if (!step) return;
 
-    const measure = (): void => {
-      const element = document.querySelector(`[data-tour="${step.target}"]`);
-      if (!element) {
-        setRect(null);
-        return;
-      }
-
-      const box = element.getBoundingClientRect();
-      setRect({ top: box.top, left: box.left, width: box.width, height: box.height });
-    };
+    const measure = (): void => setRect(visibleTarget(step.target));
 
     measure();
     const handle = window.setInterval(measure, 500);
@@ -241,6 +238,26 @@ export function Tour({ onClose }: { onClose: () => void }): JSX.Element | null {
       </div>
     </div>
   );
+}
+
+/**
+ * Sucht ein Ziel und gibt seine Flaeche zurueck - aber nur, wenn es wirklich
+ * zu sehen ist.
+ *
+ * Der Handy- und der Rechner-Aufbau stehen beide im Dokument, der jeweils
+ * andere nur per CSS ausgeblendet. `querySelector` findet also auch, was
+ * niemand sieht; nach der Groesse gefragt kommt dann ein Punkt in der Ecke
+ * heraus - und der Rundgang leuchtet ins Nichts.
+ */
+function visibleTarget(target: string): Rect | null {
+  for (const element of document.querySelectorAll(`[data-tour="${target}"]`)) {
+    const box = element.getBoundingClientRect();
+    if (box.width > 8 && box.height > 8) {
+      return { top: box.top, left: box.left, width: box.width, height: box.height };
+    }
+  }
+
+  return null;
 }
 
 /** Sprechblase neben das Loch legen - und dabei am Bildschirm bleiben. */

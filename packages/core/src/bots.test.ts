@@ -46,6 +46,7 @@ function view(overrides: Partial<BotView> = {}): BotView {
     budgetCents: parseUsd('10000'),
     availableCents: parseUsd('10000'),
     lastActionAt: null,
+    sinceLastCheckMs: 15 * 60_000,
     ...overrides,
   };
 }
@@ -159,6 +160,39 @@ describe('Fehler-Engine', () => {
     }
 
     expect(mistakes).toBeGreaterThan(50);
+  });
+
+  it('macht nicht mehr Fehler, nur weil oefter hingeschaut wird', () => {
+    // Die Fehlerquote gilt je Entscheidung. Wer den Bot alle zwei Minuten
+    // fragt, muss ueber eine Stunde etwa gleich viele Fehler sehen wie
+    // jemand, der alle zehn Sekunden fragt - sonst haengt das Verhalten am
+    // Takt des Servers statt am Bot.
+    const count = (checkMs: number): number => {
+      let mistakes = 0;
+      const schritte = Math.round((60 * 60_000) / checkMs);
+
+      for (let i = 0; i < schritte; i += 1) {
+        const intent = decide(
+          config({ errorRateBps: 3_000, seed: 4_242 }),
+          view({
+            candles: risingMarket,
+            now: 10_000_000 + i * checkMs,
+            sinceLastCheckMs: checkMs,
+          }),
+        );
+        if (intent.mistake !== null) mistakes += 1;
+      }
+
+      return mistakes;
+    };
+
+    const selten = count(DEFAULT_BOT_PARAMS.momentum.intervalMs);
+    const oft = count(10_000);
+
+    expect(selten).toBeGreaterThan(0);
+    // Grosszuegig gefasst, aber weit weg vom alten Verhalten: ohne die
+    // Zeitgewichtung waere "oft" rund das Zwoelffache von "selten".
+    expect(oft).toBeLessThan(selten * 2.5);
   });
 
   it('ist reproduzierbar - gleicher Seed, gleiche Entscheidung', () => {

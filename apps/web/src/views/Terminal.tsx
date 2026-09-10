@@ -624,7 +624,10 @@ export function Terminal({ me, leagueId }: { me: Me; leagueId: string }): JSX.El
           </div>
         ) : null}
 
-        <nav className="grid shrink-0 grid-cols-4 gap-1 border-t border-[var(--color-hairline)] pt-2">
+        <nav
+          data-tour="tabs"
+          className="grid shrink-0 grid-cols-4 gap-1 border-t border-[var(--color-hairline)] pt-2"
+        >
           {(
             [
               ['chart', 'candles', 'Chart'],

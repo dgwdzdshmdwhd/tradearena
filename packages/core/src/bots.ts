@@ -77,6 +77,14 @@ export interface BotView {
   /** Davon aktuell frei verfuegbar. */
   availableCents: Cents;
   lastActionAt: number | null;
+  /**
+   * Zeit seit der letzten Betrachtung dieses Bots.
+   *
+   * Die Fehlerquote gilt je Entscheidung. Wie oft der Server nachschaut, ist
+   * eine Frage seines Taktes und darf daran nichts aendern - sonst wird aus
+   * "18 Prozent je Entscheidung" bei vier Blicken pro Sekunde ein Dauerfeuer.
+   */
+  sinceLastCheckMs: number;
 }
 
 export interface BotIntent {
@@ -215,6 +223,18 @@ function strategySignal(config: BotConfig, view: BotView): BaseSignal {
   }
 }
 
+/**
+ * Wie viel eines Taktes seit dem letzten Blick vergangen ist.
+ *
+ * Damit wird aus der Fehlerquote wieder das, was sie sein soll: ein Wert je
+ * Entscheidung. Schaut der Server doppelt so oft nach, ist jeder Blick nur
+ * halb so viel wert - unterm Strich kommt dasselbe heraus.
+ */
+function checkShare(config: BotConfig, view: BotView): number {
+  const interval = Math.max(1, config.params.intervalMs);
+  return Math.min(1, Math.max(0, view.sinceLastCheckMs) / interval);
+}
+
 function applyMistakes(
   config: BotConfig,
   view: BotView,
@@ -222,7 +242,7 @@ function applyMistakes(
   rng: Rng,
   cooldownOver: boolean,
 ): BotIntent {
-  const probability = Math.max(0, config.errorRateBps) / 10_000;
+  const probability = (Math.max(0, config.errorRateBps) / 10_000) * checkShare(config, view);
   const holding = view.position.qty > 0n;
   const move = changeBps(view.candles, 3);
 

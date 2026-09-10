@@ -54,12 +54,18 @@ import type { SimMarket } from './simmarket.js';
 import { markFor, toPool, toPosition, type Trading } from './trading.js';
 import { big, bigOrNull, int, jsonParse, newId, now } from './util.js';
 
+/** Wie oft ein Bot hoechstens nachdenkt. */
+const BOT_CHECK_MS = 10_000;
+
 export class Engine {
   private timer: NodeJS.Timeout | null = null;
   private broadcastTimer: NodeJS.Timeout | null = null;
   private lastSnapshotAt = 0;
   private lastTickAt = Date.now();
   private running = false;
+  /** Wann jeder Bot zuletzt hingeschaut hat. Ueberlebt keinen Neustart - das
+   *  ist in Ordnung, dann faengt die Rechnung eben neu an. */
+  private readonly botChecks = new Map<string, number>();
 
   constructor(
     private readonly db: Db,
@@ -528,6 +534,14 @@ export class Engine {
       const entry = quotes.get(bot.instrument_id);
       if (!entry) continue;
 
+      // Der Motor laeuft viermal je Sekunde. So oft muss kein Bot nachdenken -
+      // und er darf es auch nicht, sonst wuerde jeder Takt als eigene
+      // Entscheidung zaehlen und die Fehlerquote ins Absurde treiben.
+      const lastCheck = this.botChecks.get(bot.id);
+      const since = lastCheck === undefined ? BOT_CHECK_MS : at - lastCheck;
+      if (since < BOT_CHECK_MS) continue;
+      this.botChecks.set(bot.id, at);
+
       const account = await this.trading.accountById(bot.account_id);
       const position = await this.trading.positionFor(bot.account_id, bot.instrument_id);
 
@@ -555,6 +569,7 @@ export class Engine {
           budgetCents: big(bot.budget),
           availableCents: account.cash,
           lastActionAt: bot.last_action_at === null ? null : int(bot.last_action_at),
+          sinceLastCheckMs: since,
         },
       );
 
