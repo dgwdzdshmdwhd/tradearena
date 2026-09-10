@@ -16,10 +16,20 @@ services:
     runtime: node
     plan: free
     region: frankfurt
-    # --include=dev ist hier zwingend: weiter unten steht NODE_ENV=production,
-    # und dann laesst npm die devDependencies weg. Vite und Tailwind stehen
-    # aber genau dort - ohne sie gibt es kein Frontend zu bauen.
-    buildCommand: npm install --include=dev && npm run build
+    # Zwei Fallstricke stecken in dieser einen Zeile:
+    #
+    # 1. `rm -f package-lock.json`: Die Lockfile entsteht auf einem
+    #    Windows-Rechner. npm installiert danach auf Linux zwar nach Lockfile,
+    #    laesst aber die plattformabhaengigen Binaerpakete weg (lightningcss,
+    #    esbuild, rollup) - obwohl deren Linux-Eintraege in der Lockfile
+    #    stehen. Der Build stirbt dann mit "Cannot find module
+    #    ../lightningcss.linux-x64-gnu.node". Bekannter npm-Fehler, und der
+    #    empfohlene Ausweg ist genau dieser: ohne Lockfile aufloesen lassen.
+    #
+    # 2. `--include=dev`: Weiter unten steht NODE_ENV=production, und dann
+    #    laesst npm die devDependencies weg. Vite und Tailwind stehen aber
+    #    genau dort.
+    buildCommand: rm -f package-lock.json && npm install --include=dev --no-audit --no-fund && npm run build
     startCommand: npm start
     healthCheckPath: /healthz
     envVars:
