@@ -18,6 +18,7 @@ import {
   abs,
   accountEquityCents,
   ammRemoveLiquidity,
+  ammQuoteBuyExactTokens,
   ammSell,
   applyFillToPosition,
   applyUpgradesToFees,
@@ -315,6 +316,7 @@ export class Trading {
 
     const position = await this.positionFor(account.id, instrument.id);
     const reduceOnly = input.reduceOnly === true;
+    const onPool = instrument.priceSource === 'amm' || instrument.priceSource === 'sim';
 
     if (reduceOnly) {
       const held = abs(position.qty);
@@ -324,7 +326,24 @@ export class Trading {
       if (side !== closingSide) throw badRequest('Diese Order wuerde die Position vergroessern.');
     }
 
-    const estimate = executeMarket({ side, qty, quote, rules, volBps: this.volatilityFor(instrument, league) });
+    /*
+     * Auf einer Kurve kostet eine grosse Order mehr als Menge mal Kurs.
+     *
+     * Die Schaetzung lief bisher immer ueber den Quote - einen einzigen Kurs.
+     * Bei einem Liquiditaetspool stimmt das nur fuer kleine Orders: Wer einen
+     * grossen Teil des Pools kauft, zahlt entlang der Kurve ein Vielfaches.
+     * Die Kaufkraftpruefung sah also einen Bruchteil der echten Kosten.
+     *
+     * Am 11.09. ist ANKR dadurch in einer Minute von 138 auf 1628 $ gesprungen
+     * und sofort zurueck: eine Order, die die Pruefung fuer bezahlbar hielt,
+     * hat sich durch den halben Pool gefressen.
+     */
+    if (onPool) qty = await this.capPoolOrder(instrument, side, qty, position);
+
+    const estimate = onPool
+      ? await this.estimateOnPool(instrument, side, qty, quote, rules)
+      : executeMarket({ side, qty, quote, rules, volBps: this.volatilityFor(instrument, league) });
+
     if (estimate.grossCents < instrument.minNotional) {
       throw badRequest('Ordervolumen liegt unter dem Mindestbetrag.');
     }
@@ -383,6 +402,91 @@ export class Trading {
       message: 'Order liegt im Markt.',
       prestigeGained: 0,
     };
+  }
+
+  /**
+   * Begrenzt, wie viel eine einzelne Order aus dem Pool nehmen darf.
+   *
+   * Auf einer Kurve x*y=k gibt es keine natuerliche Obergrenze: Wer sich dem
+   * gesamten Tokenbestand naehert, treibt den Kurs gegen unendlich. Ein
+   * Viertel des Bestands ist ein spuerbarer, aber verkraftbarer Schlag - der
+   * Kurs steigt dabei auf etwa das Eineindrittelfache.
+   *
+   * Das ist keine Bevormundung, sondern die Bedingung dafuer, dass der Markt
+   * nach der Order noch einer ist. Wer mehr will, kauft eben zweimal - und
+   * zahlt beim zweiten Mal den hoeheren Kurs.
+   */
+  private async capPoolOrder(
+    instrument: Instrument,
+    side: Side,
+    qty: Qty,
+    position: PositionState,
+  ): Promise<Qty> {
+    const pool = await this.poolFor(instrument);
+    if (!pool) return qty;
+
+    if (side === 'buy') {
+      const grenze = pool.reserveTokens / 4n;
+      return qty > grenze && grenze > 0n ? grenze : qty;
+    }
+
+    // Verkaufen ist ohnehin auf den eigenen Bestand begrenzt (siehe
+    // `fillOrder`); hier bleibt nur der Schutz des Pools.
+    const grenze = pool.reserveTokens / 2n;
+    const erlaubt = qty > grenze && grenze > 0n ? grenze : qty;
+    return position.qty > 0n && erlaubt > position.qty ? position.qty : erlaubt;
+  }
+
+  /** Was eine Order auf der Kurve wirklich kostet oder einbringt. */
+  private async estimateOnPool(
+    instrument: Instrument,
+    side: Side,
+    qty: Qty,
+    quote: Quote,
+    rules: LeagueRules,
+  ): Promise<Fill> {
+    const pool = await this.poolFor(instrument);
+    if (!pool) {
+      return executeMarket({ side, qty, quote, rules, volBps: 0 });
+    }
+
+    if (side === 'buy') {
+      const spend = ammQuoteBuyExactTokens(pool, qty);
+      const brokerFee = computeFeeCents(spend, rules.fees, 'taker');
+
+      return {
+        price: priceFromNotional(spend, qty, 'half_up'),
+        qty,
+        grossCents: spend,
+        feeCents: brokerFee,
+        slippageCents: 0n,
+        cashDeltaCents: -(spend + brokerFee),
+        liquidity: 'taker',
+      };
+    }
+
+    const result = ammSell(pool, qty);
+    const brokerFee = computeFeeCents(result.proceedsCents, rules.fees, 'taker');
+
+    return {
+      price: result.avgPrice,
+      qty,
+      grossCents: result.proceedsCents + result.feeCents,
+      feeCents: result.feeCents + brokerFee,
+      slippageCents: 0n,
+      cashDeltaCents: result.proceedsCents - brokerFee,
+      liquidity: 'taker',
+    };
+  }
+
+  /** Der Pool hinter einem Wert - Arena oder Spieler-Coin. */
+  private async poolFor(instrument: Instrument): Promise<Pool | null> {
+    if (instrument.priceSource === 'sim') return this.sim.pool(instrument.id);
+
+    const coin = await this.db.get<CoinRow>('SELECT * FROM coins WHERE instrument_id = ?', [
+      instrument.id,
+    ]);
+    return coin && coin.status === 'live' ? toPool(coin) : null;
   }
 
   /**
