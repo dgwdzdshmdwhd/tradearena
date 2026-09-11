@@ -494,3 +494,85 @@ textarea.input {
 ::-webkit-scrollbar-thumb:hover {
   background: var(--color-fg-3);
 }
+
+/* --------------------------------------------------------------------------
+   Streiche des Spielleiters.
+
+   Die Effekte fassen absichtlich den ganzen Bildschirm an und nicht nur die
+   Meldung darueber - wer einen Kopfstand geschickt bekommt, soll auch sein
+   Orderfenster auf dem Kopf sehen. Alle sind zeitlich begrenzt und enden von
+   selbst; niemand bleibt in einem gedrehten Terminal haengen.
+   -------------------------------------------------------------------------- */
+
+body.ta-beben {
+  animation: ta-beben 0.14s linear infinite;
+}
+
+@keyframes ta-beben {
+  0%,
+  100% {
+    transform: translate(0, 0) rotate(0deg);
+  }
+  25% {
+    transform: translate(-6px, 3px) rotate(-0.4deg);
+  }
+  50% {
+    transform: translate(5px, -4px) rotate(0.3deg);
+  }
+  75% {
+    transform: translate(-3px, -2px) rotate(0.2deg);
+  }
+}
+
+body.ta-kopfstand {
+  transform: rotate(180deg);
+  transition: transform 0.7s ease;
+}
+
+body.ta-stroboskop {
+  animation: ta-stroboskop 0.22s steps(2, end) infinite;
+}
+
+@keyframes ta-stroboskop {
+  0% {
+    filter: none;
+  }
+  50% {
+    filter: invert(1) hue-rotate(90deg);
+  }
+}
+
+.ta-schein {
+  top: -8%;
+  animation-name: ta-fallen;
+  animation-timing-function: linear;
+  animation-iteration-count: infinite;
+}
+
+@keyframes ta-fallen {
+  0% {
+    transform: translateY(-10vh) rotate(0deg);
+    opacity: 0;
+  }
+  12% {
+    opacity: 1;
+  }
+  100% {
+    transform: translateY(112vh) rotate(320deg);
+    opacity: 0.9;
+  }
+}
+
+/* Wer das Blinken nicht vertraegt, bekommt es auch nicht. */
+@media (prefers-reduced-motion: reduce) {
+  body.ta-beben,
+  body.ta-stroboskop {
+    animation: none;
+  }
+  body.ta-kopfstand {
+    transform: none;
+  }
+  .ta-schein {
+    display: none;
+  }
+}

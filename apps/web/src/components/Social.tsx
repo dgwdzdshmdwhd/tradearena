@@ -194,6 +194,24 @@ function describe(event: FeedEvent): { text: ReactNode; tone?: string; icon?: Ic
         ),
       };
 
+    case 'host_cash': {
+      // Eingriffe des Gastgebers stehen offen im Feed. Ein Spielleiter, der
+      // sichtbar schummelt, ist der Spass - einer, der es heimlich tut, nicht.
+      const betrag = BigInt(String(payload.amountCents ?? '0'));
+      return {
+        tone: betrag >= 0n ? 'up' : 'down',
+        icon: 'sliders',
+        text: (
+          <>
+            Spielleiter: <b className="font-medium">{String(payload.name ?? 'jemand')}</b>{' '}
+            {betrag >= 0n ? 'bekommt' : 'verliert'}{' '}
+            <b className="num font-medium">{fmtUsd((betrag < 0n ? -betrag : betrag).toString())}</b>
+            {payload.reason ? ` - ${String(payload.reason)}` : '.'}
+          </>
+        ),
+      };
+    }
+
     case 'rugpull':
       return {
         tone: 'down',

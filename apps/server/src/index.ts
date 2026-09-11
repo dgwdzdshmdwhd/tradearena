@@ -24,6 +24,7 @@ import { ReplayStore } from './replay.js';
 import { SimMarket } from './simmarket.js';
 import { registerAuthRoutes } from './routes/auth.js';
 import { registerLeagueRoutes } from './routes/leagues.js';
+import { registerHostRoutes } from './routes/host.js';
 import { registerTradeRoutes } from './routes/trade.js';
 import { Trading } from './trading.js';
 import { HttpError, Mutex, newId, now } from './util.js';
@@ -93,7 +94,10 @@ async function main(): Promise<void> {
 
   const app = Fastify({
     logger: false,
-    bodyLimit: 512 * 1024,
+    // Reicht fuer alles im Spiel - nur hochgeladene Clips des Spielleiters
+    // sind groesser. Base64 blaeht um ein Drittel auf, deshalb neun Megabyte
+    // fuer sechs Megabyte Datei.
+    bodyLimit: 9 * 1024 * 1024,
     trustProxy: true,
   });
 
@@ -128,6 +132,7 @@ async function main(): Promise<void> {
   registerAuthRoutes(app, ctx);
   registerLeagueRoutes(app, ctx);
   registerTradeRoutes(app, ctx);
+  registerHostRoutes(app, ctx);
 
   // Gebautes Frontend ausliefern, wenn vorhanden. Im Entwicklungsmodus
   // uebernimmt das Vite auf Port 5173.

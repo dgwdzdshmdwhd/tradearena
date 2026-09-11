@@ -70,6 +70,15 @@ const MEME_MAX_ALIVE = 3;
  * `retireDeadMemes`.
  */
 const MEME_GRAVE_MS = 12 * 60_000;
+/**
+ * Ab wann auch ein Ueberlebender die Liste raeumt.
+ *
+ * Ein "Laeufer" faellt nach dem Gipfel nur zurueck und lebt weiter - schoen
+ * fuer den, der ihn haelt. Bleibt er aber fuer immer, stehen nach einem Abend
+ * zwanzig alte Memecoins in der Marktliste und die eigentliche Neuigkeit geht
+ * darin unter.
+ */
+const MEME_RETIRE_MS = 45 * 60_000;
 
 /**
  * Wie stark der Kaufdruck der Spieler den Kurs zusaetzlich schiebt.
@@ -131,6 +140,8 @@ export class SimMarket {
   private lastPersist = 0;
   private lastCandleMinute = 0;
   private lastMemeCheck = 0;
+  /** Wann zuletzt ein Memecoin gestartet ist - unabhaengig davon, ob er noch lebt. */
+  private lastMemeSpawn = 0;
   /** Zeitstempel der zuletzt gespeicherten Kerze, je Wert. */
   private readonly lastWritten = new Map<string, number>();
 
@@ -154,6 +165,38 @@ export class SimMarket {
 
     asset.hypeNet += side === 'buy' ? betrag : -betrag;
     asset.hypeGross += betrag;
+  }
+
+  /**
+   * Ereignis von aussen setzen - der Spielleiter schubst den Markt an.
+   *
+   * Bewusst dieselbe Mechanik wie die Ereignisse, die der Markt von sich aus
+   * wuerfelt. Ein Sonderweg, der Kurse anders rechnet, waere eine zweite
+   * Wahrheit im selben Chart.
+   */
+  forceEvent(instrumentId: string, headline: string, driftBpsPerMin: number, minutes: number): void {
+    const asset = this.assets.get(instrumentId);
+    if (!asset) return;
+
+    asset.event = {
+      key: 'host',
+      headline,
+      driftBpsPerMin,
+      until: Date.now() + minutes * 60_000,
+    };
+
+    this.onEvent?.(asset, headline, driftBpsPerMin > 0);
+  }
+
+  /** Memecoin auf Zuruf starten. Gibt das Kuerzel zurueck, sonst null. */
+  async spawnMemeNow(): Promise<string | null> {
+    const vorher = new Set(this.assets.keys());
+    await this.spawnMeme(Date.now());
+
+    for (const [id, asset] of this.assets) {
+      if (!vorher.has(id)) return asset.symbol;
+    }
+    return null;
   }
 
   /** Hitze von 0 bis 100 fuer die Anzeige. */
@@ -364,6 +407,8 @@ export class SimMarket {
       }));
 
       this.lastWritten.set(row.instrument_id, history[history.length - 2]?.t ?? 0);
+      // Nach einem Neustart soll nicht sofort der naechste Coin starten.
+      this.lastMemeSpawn = Math.max(this.lastMemeSpawn, int(row.born_at));
 
       this.assets.set(row.instrument_id, {
         instrumentId: row.instrument_id,
@@ -592,8 +637,17 @@ export class SimMarket {
     );
     if (lebend.length >= MEME_MAX_ALIVE) return;
 
-    const juengster = lebend.reduce((max, asset) => Math.max(max, asset.meme!.bornAt), 0);
-    if (at - juengster < MEME_SPAWN_MS) return;
+    /*
+     * Der Abstand zaehlt ab dem letzten Start, nicht ab dem juengsten
+     * lebenden Coin.
+     *
+     * Vorher wurde er aus den lebenden gerechnet - und sobald alle ihren
+     * Gipfel hinter sich hatten, war die Liste leer, der Abstand damit
+     * unendlich und es startete im Fuenf-Sekunden-Takt einer nach dem
+     * anderen. Auf dem Server waren so in kurzer Zeit alle 26 Namen
+     * verbraucht.
+     */
+    if (at - this.lastMemeSpawn < MEME_SPAWN_MS) return;
 
     await this.spawnMeme(at);
   }
@@ -674,6 +728,7 @@ export class SimMarket {
       depthCents: Number(MEME_DEPTH_CENTS),
     });
 
+    this.lastMemeSpawn = at;
     console.log(`[meme] ${def.symbol} gestartet (${plan.archetype})`);
     this.onMeme?.(this.assets.get(id)!);
   }
@@ -690,10 +745,23 @@ export class SimMarket {
 
       const alter = at - asset.meme.bornAt;
       const phase = segmentAt(asset.meme.plan, alter).phase;
-      if (phase !== 'grab') continue;
 
-      const seitBeerdigung = alter - this.graveStart(asset);
-      if (seitBeerdigung < MEME_GRAVE_MS) continue;
+      /*
+       * Zwei Wege aus der Liste.
+       *
+       * Der Tote geht kurz nach der Beerdigung. Der Ueberlebende ("Laeufer")
+       * darf laenger bleiben - er hat sich seinen Platz verdient, und wer ihn
+       * gehalten hat, soll den Gewinn noch sehen. Irgendwann geht aber auch
+       * er, sonst sammeln sich ueber einen Abend zwanzig davon an und die
+       * Marktliste wird zu der Wand, die sie nie sein sollte.
+       */
+      if (phase === 'grab') {
+        if (alter - this.graveStart(asset) < MEME_GRAVE_MS) continue;
+      } else if (phase === 'ruhe') {
+        if (alter < MEME_RETIRE_MS) continue;
+      } else {
+        continue;
+      }
 
       const gehalten = await this.db.get<{ n: number }>(
         `SELECT COUNT(*) AS n FROM positions WHERE instrument_id = ? AND qty <> '0'`,

@@ -523,6 +523,19 @@ const SCHEMA: string[] = [
     key TEXT PRIMARY KEY,
     value TEXT NOT NULL
   )`,
+
+  // Clips und Bilder, die ein Spielleiter hochlaedt. In der Datenbank und
+  // nicht auf der Platte: Das Dateisystem des Servers wird bei jedem Deploy
+  // neu aufgesetzt, ein dort abgelegtes Video waere am naechsten Abend weg.
+  `CREATE TABLE IF NOT EXISTS media (
+    id TEXT PRIMARY KEY,
+    user_id TEXT NOT NULL,
+    mime TEXT NOT NULL,
+    name TEXT NOT NULL DEFAULT '',
+    bytes INTEGER NOT NULL,
+    data TEXT NOT NULL,
+    created_at BIGINT NOT NULL
+  )`,
 ];
 
 /**

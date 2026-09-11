@@ -4,6 +4,7 @@ import { inviteLink, navigate } from '../App.js';
 import { BotsPanel } from '../components/BotsPanel.js';
 import { Chart } from '../components/Chart.js';
 import { CoinsPanel } from '../components/CoinsPanel.js';
+import { HostPanel } from '../components/HostPanel.js';
 import { Icon, MODE_ICONS } from '../components/Icon.js';
 import { NextStep } from '../components/NextStep.js';
 import { Tour } from '../components/Tour.js';
@@ -80,6 +81,7 @@ export function Terminal({ me, leagueId }: { me: Me; leagueId: string }): JSX.El
     rank: me.rank.title,
     next: me.nextRank,
   });
+  const [showHost, setShowHost] = useState(false);
   const [showTutorial, setShowTutorial] = useState(
     () => localStorage.getItem('ta_tutorial_done') !== '1',
   );
@@ -430,6 +432,17 @@ export function Terminal({ me, leagueId }: { me: Me; leagueId: string }): JSX.El
               <Icon name={soundOn ? 'volume-on' : 'volume-off'} size={15} />
             </button>
 
+            {/* Das Pult sieht nur, wer die Liga aufgemacht hat. */}
+            {league.ownerId === me.user.id ? (
+              <button
+                className="btn btn-ghost btn-sm"
+                onClick={() => setShowHost(true)}
+                title="Spielleiter-Pult"
+              >
+                <Icon name="sliders" size={15} />
+              </button>
+            ) : null}
+
             {league.ownerId === me.user.id && league.status === 'running' ? (
               <button className="btn btn-ghost btn-sm" onClick={() => void finishLeague()}>
                 beenden
@@ -657,6 +670,14 @@ export function Terminal({ me, leagueId }: { me: Me; leagueId: string }): JSX.El
           ))}
         </nav>
       </div>
+
+      {showHost ? (
+        <HostPanel
+          leagueId={leagueId}
+          instruments={instruments}
+          onClose={() => setShowHost(false)}
+        />
+      ) : null}
 
       {showTutorial ? (
         <Tour
