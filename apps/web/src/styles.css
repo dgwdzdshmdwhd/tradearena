@@ -576,3 +576,24 @@ body.ta-stroboskop {
     display: none;
   }
 }
+
+/* Pulsiert in den letzten Minuten einer Runde. */
+.pulse {
+  animation: pulse-soft 1s ease-in-out infinite;
+}
+
+@keyframes pulse-soft {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.45;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pulse {
+    animation: none;
+  }
+}

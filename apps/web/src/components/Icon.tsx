@@ -191,6 +191,7 @@ export const FEED_ICONS: Record<string, IconName> = {
 
 export const MODE_ICONS: Record<string, IconName> = {
   classic: 'candles',
+  feierabend: 'clock',
   blitz: 'zap',
   survival: 'shield',
   timemachine: 'hourglass',

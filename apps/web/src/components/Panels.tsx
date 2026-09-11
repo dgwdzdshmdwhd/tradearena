@@ -393,6 +393,58 @@ export function Leaderboard({
   const [showBots, setShowBots] = useState(false);
   const list = showBots ? bots : entries;
 
+  /*
+   * Ueberholt worden? Dann sagt es das auch.
+   *
+   * Eine Tabelle, in der sich still eine Zeile verschiebt, merkt niemand. Der
+   * Hinweis macht aus der Liste ein Rennen - und zwar in beide Richtungen,
+   * denn Ueberholen soll sich ebenso gut anfuehlen.
+   */
+  const meinPlatz = entries.findIndex((entry) => entry.userId === meUserId && !entry.isBot);
+  const vorher = useRef<number | null>(null);
+
+  useEffect(() => {
+    if (meinPlatz < 0) {
+      vorher.current = null;
+      return;
+    }
+
+    const alt = vorher.current;
+    vorher.current = meinPlatz;
+    // Beim ersten Laden gibt es nichts zu melden, nur beim Wechsel.
+    if (alt === null || alt === meinPlatz || entries.length < 2) return;
+
+    const gegner = entries[meinPlatz + (meinPlatz > alt ? -1 : 1)];
+
+    if (meinPlatz > alt) {
+      pushToast(
+        {
+          kind: 'danger',
+          icon: 'trend-down',
+          title: `${gegner?.username ?? 'Jemand'} zieht an dir vorbei`,
+          body: `Du bist jetzt auf Platz ${meinPlatz + 1}.`,
+        },
+        4_000,
+      );
+    } else {
+      pushToast(
+        {
+          kind: 'success',
+          icon: 'trend-up',
+          title: `Platz ${meinPlatz + 1}`,
+          body: gegner ? `Vorbei an ${gegner.username}.` : 'Nach vorn gearbeitet.',
+        },
+        4_000,
+      );
+    }
+  }, [meinPlatz, entries]);
+
+  // Fuer die Balken: der beste Stand ist die volle Breite.
+  const spitze = list.reduce(
+    (max, entry) => (Number(entry.equityCents) > max ? Number(entry.equityCents) : max),
+    1,
+  );
+
   return (
     <div className="panel flex min-h-0 flex-col">
       <div className="panel-head">
@@ -444,7 +496,18 @@ export function Leaderboard({
                 <span className="block truncate text-[14px]">
                   {entry.isBot ? entry.label : entry.username}
                 </span>
-                <span className="dimmer num text-[12px]">{entry.trades} Trades</span>
+
+                {/* Der Balken macht aus Zahlen einen Abstand, den man sieht. */}
+                <span className="mt-1 flex h-[3px] w-full overflow-hidden rounded-full bg-[var(--color-hairline)]">
+                  <i
+                    className="block h-full transition-all duration-700"
+                    style={{
+                      width: `${Math.max(2, (Number(entry.equityCents) / spitze) * 100)}%`,
+                      background:
+                        bps > 0 ? 'var(--color-up)' : bps < 0 ? 'var(--color-down)' : 'var(--color-fg-3)',
+                    }}
+                  />
+                </span>
               </span>
 
               <span className="text-right">

@@ -24,4 +24,5 @@ export * from './bots.js';
 export * from './achievements.js';
 export * from './simmarket.js';
 export * from './memecoins.js';
+export * from './rounds.js';
 export * from './prestige.js';

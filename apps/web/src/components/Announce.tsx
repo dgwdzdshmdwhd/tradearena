@@ -97,6 +97,23 @@ export function Announce(): JSX.Element | null {
       );
     }
 
+    if (event === 'round_phase') {
+      // Der Phasenwechsel ist die Ansage, dass jetzt etwas anders ist -
+      // dafuer lohnt sich der ganze Bildschirm.
+      sounds.achievement();
+      show(
+        {
+          kind: 'event',
+          icon: 'clock',
+          eyebrow: 'Neue Phase',
+          title: String(data.label ?? ''),
+          detail: String(data.blurb ?? ''),
+          color: data.key === 'finale' ? '#f0555b' : data.key === 'endspurt' ? '#f0a23a' : '#d4a24c',
+        },
+        4_500,
+      );
+    }
+
     if (event === 'market_event') {
       show(
         {

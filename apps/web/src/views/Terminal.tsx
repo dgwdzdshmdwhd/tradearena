@@ -1,12 +1,14 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
 import { inviteLink, navigate } from '../App.js';
+import { Abspann } from '../components/Abspann.js';
 import { BotsPanel } from '../components/BotsPanel.js';
 import { Chart } from '../components/Chart.js';
 import { CoinsPanel } from '../components/CoinsPanel.js';
 import { HostPanel } from '../components/HostPanel.js';
 import { Icon, MODE_ICONS } from '../components/Icon.js';
 import { NextStep } from '../components/NextStep.js';
+import { Rundenuhr } from '../components/Rundenuhr.js';
 import { Tour } from '../components/Tour.js';
 import { Leaderboard, OpenOrders, OrderBook, Positions, Watchlist } from '../components/Panels.js';
 import { Chat, Feed } from '../components/Social.js';
@@ -51,6 +53,7 @@ const MAIN_LABELS: Record<MainPanel, string> = {
 
 const MODE_LABELS: Record<string, string> = {
   classic: 'Klassisch',
+  feierabend: 'Feierabendrunde',
   blitz: 'Blitzrunde',
   survival: 'Survival',
   timemachine: 'Zeitmaschine',
@@ -82,6 +85,7 @@ export function Terminal({ me, leagueId }: { me: Me; leagueId: string }): JSX.El
     next: me.nextRank,
   });
   const [showHost, setShowHost] = useState(false);
+  const [showAbspann, setShowAbspann] = useState(false);
   const [showTutorial, setShowTutorial] = useState(
     () => localStorage.getItem('ta_tutorial_done') !== '1',
   );
@@ -163,6 +167,18 @@ export function Terminal({ me, leagueId }: { me: Me; leagueId: string }): JSX.El
     quiet(loadCoins());
   }, [loadLeague, loadInstruments, loadPortfolio, loadBoard, loadFeed, loadChat, loadCoins]);
 
+  /*
+   * Die Auswertung geht von selbst auf, sobald die Runde endet.
+   *
+   * Ein Knopf allein wuerde nicht reichen - der Moment, in dem alle
+   * gleichzeitig auf dieselbe Siegerehrung schauen, ist der Punkt. Wer sie
+   * wegklickt, holt sie oben ueber "Auswertung" zurueck.
+   */
+  const beendet = league?.status === 'finished';
+  useEffect(() => {
+    if (beendet) setShowAbspann(true);
+  }, [beendet]);
+
   // Memecoins laufen in Fuenf-Sekunden-Kerzen. Alle halbe Minute nachladen
   // hiesse, den halben Anstieg erst hinterher zu sehen.
   const memeSelected = Boolean(selected?.meme);
@@ -189,12 +205,16 @@ export function Terminal({ me, leagueId }: { me: Me; leagueId: string }): JSX.El
     const handle = setInterval(() => {
       quiet(loadFeed());
       quiet(loadDesk());
+      // Das Ende kommt normalerweise ueber den WebSocket. Falls die
+      // Verbindung genau dann haengt, faellt es hier spaetestens auf - sonst
+      // saesse jemand vor einer Runde, die laengst vorbei ist.
+      quiet(loadLeague());
       if (sidePanel === 'chat') quiet(loadChat());
       if (sidePanel === 'coins') quiet(loadCoins());
     }, 9_000);
 
     return () => clearInterval(handle);
-  }, [loadFeed, loadChat, loadCoins, loadDesk, sidePanel]);
+  }, [loadFeed, loadChat, loadCoins, loadDesk, loadLeague, sidePanel]);
 
   useLiveEvent((event, payload) => {
     if (event === 'trade') {
@@ -370,6 +390,13 @@ export function Terminal({ me, leagueId }: { me: Me; leagueId: string }): JSX.El
             >
               {fmtBps(bps)}
             </span>
+
+            {/* Zeigt sich nur bei Runden mit Takt - siehe rounds.ts */}
+            {league.status === 'running' ? (
+              <div className="mb-1 hidden md:block">
+                <Rundenuhr startsAt={league.startsAt} endsAt={league.endsAt} />
+              </div>
+            ) : null}
           </div>
 
           <div className="ml-auto flex items-center gap-2.5">
@@ -493,12 +520,15 @@ export function Terminal({ me, leagueId }: { me: Me; leagueId: string }): JSX.El
         }}
       />
 
-      {league.status === 'finished' && league.reveal ? (
+      {league.status === 'finished' ? (
         <div className="flex items-center justify-center gap-2 border-b border-[var(--color-hairline)] bg-[var(--color-raised)] px-3 py-1.5 text-[13px]">
           <span className="accent">
             <Icon name="flag" size={13} />
           </span>
-          {league.reveal}
+          {league.reveal ?? 'Runde beendet.'}
+          <button className="btn btn-sm ml-2" onClick={() => setShowAbspann(true)}>
+            Auswertung
+          </button>
         </div>
       ) : null}
 
@@ -670,6 +700,14 @@ export function Terminal({ me, leagueId }: { me: Me; leagueId: string }): JSX.El
           ))}
         </nav>
       </div>
+
+      {showAbspann ? (
+        <Abspann
+          leagueId={leagueId}
+          meName={me.user.username}
+          onClose={() => setShowAbspann(false)}
+        />
+      ) : null}
 
       {showHost ? (
         <HostPanel

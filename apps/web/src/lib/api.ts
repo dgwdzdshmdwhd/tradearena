@@ -96,7 +96,7 @@ export interface LeagueSummary {
 export interface LeagueDetail {
   id: string;
   name: string;
-  mode: 'classic' | 'blitz' | 'survival' | 'timemachine';
+  mode: 'classic' | 'feierabend' | 'blitz' | 'survival' | 'timemachine';
   /** 'arena' = eigene Werte des Spiels, 'crypto' = echte Boersenkurse. */
   market: 'arena' | 'crypto';
   status: 'running' | 'finished';

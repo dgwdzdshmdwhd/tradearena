@@ -144,6 +144,8 @@ export class SimMarket {
   private lastMemeSpawn = 0;
   /** Zeitstempel der zuletzt gespeicherten Kerze, je Wert. */
   private readonly lastWritten = new Map<string, number>();
+  /** 1 = ruhig, 3 = Finale. Kommt aus dem Rundentakt der Engine. */
+  private marktHitze = 1;
 
   /** Wird gesetzt, damit Ereignisse im Liga-Feed landen koennen. */
   onEvent: ((asset: SimAssetState, headline: string, up: boolean) => void) | null = null;
@@ -197,6 +199,19 @@ export class SimMarket {
       if (!vorher.has(id)) return asset.symbol;
     }
     return null;
+  }
+
+  /**
+   * Wie nervoes der Markt gerade ist.
+   *
+   * Wird von der Engine gesetzt und folgt der heissesten laufenden Runde: Ist
+   * irgendwo Endspurt, schwankt der Markt staerker und Memecoins starten
+   * dichter. Global, weil der Markt global ist - es gibt keine Kurse "nur fuer
+   * diese Liga". Passt aber auch inhaltlich: ein Markt, an dem gerade viele
+   * gleichzeitig nervoes werden.
+   */
+  setHeat(faktor: number): void {
+    this.marktHitze = Math.max(1, Math.min(3, faktor));
   }
 
   /** Hitze von 0 bis 100 fuer die Anzeige. */
@@ -612,9 +627,18 @@ export class SimMarket {
   private withHype(asset: SimAssetState): SimParams {
     const max = asset.meme ? HYPE_MAX_BPS_MEME : HYPE_MAX_BPS_AKTIE;
     const extra = hypeDriftBps(asset.hypeNet, asset.depthCents, max);
-    if (extra === 0) return asset.params;
 
-    return { ...asset.params, driftBpsPerMin: asset.params.driftBpsPerMin + extra };
+    /*
+     * Die Hitze wirkt nur auf die Schwankung, nicht auf den Trend.
+     *
+     * Waere sie auf dem Trend, wuerde ein Endspurt den Markt in eine Richtung
+     * schieben - und wer zufaellig richtig liegt, gewinnt. So wird es nur
+     * wilder: mehr Ausschlag in beide Richtungen, gleiche Chancen.
+     */
+    return {
+      driftBpsPerMin: asset.params.driftBpsPerMin + extra,
+      volBpsPerMin: asset.params.volBpsPerMin * this.marktHitze,
+    };
   }
 
   // --------------------------------------------------------- Memecoins
@@ -647,7 +671,9 @@ export class SimMarket {
      * anderen. Auf dem Server waren so in kurzer Zeit alle 26 Namen
      * verbraucht.
      */
-    if (at - this.lastMemeSpawn < MEME_SPAWN_MS) return;
+    // Je heisser die Runde, desto dichter kommen die Memecoins: im Endspurt
+    // knapp jede zweieinhalb Minuten statt alle sechs.
+    if (at - this.lastMemeSpawn < MEME_SPAWN_MS / this.marktHitze) return;
 
     await this.spawnMeme(at);
   }

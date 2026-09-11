@@ -9,6 +9,7 @@ import type { FastifyInstance } from 'fastify';
 
 import { config } from '../config.js';
 import { requireUser, type Context } from '../context.js';
+import { buildResults } from '../results.js';
 import { SCENARIOS, SCENARIO_BY_KEY } from '../replay.js';
 import {
   toAccount,
@@ -36,6 +37,9 @@ import {
 
 const MODE_PRESETS = {
   classic: { durationMinutes: 7 * 24 * 60, leverage: 1, bots: true, coins: true },
+  // Der Abend-Modus: lang genug fuer eine Geschichte, kurz genug fuer einen
+  // Feierabend - und mit Phasen, die zum Schluss anziehen (siehe rounds.ts).
+  feierabend: { durationMinutes: 45, leverage: 3, bots: true, coins: true },
   blitz: { durationMinutes: 15, leverage: 10, bots: false, coins: false },
   survival: { durationMinutes: 24 * 60, leverage: 2, bots: true, coins: true },
   timemachine: { durationMinutes: 15, leverage: 2, bots: false, coins: false },
@@ -81,7 +85,7 @@ export function registerLeagueRoutes(app: FastifyInstance, ctx: Context): void {
     const body = request.body as Record<string, unknown>;
 
     const name = trimText(body.name, 40) || 'Namenlose Liga';
-    const mode = (['classic', 'blitz', 'survival', 'timemachine'] as const).includes(
+    const mode = (['classic', 'feierabend', 'blitz', 'survival', 'timemachine'] as const).includes(
       body.mode as never,
     )
       ? (body.mode as keyof typeof MODE_PRESETS)
@@ -265,6 +269,24 @@ export function registerLeagueRoutes(app: FastifyInstance, ctx: Context): void {
     });
 
     return { leagueId: row.id, alreadyMember: false };
+  });
+
+  /**
+   * Die Auswertung am Rundenende.
+   *
+   * Auch abrufbar, waehrend die Liga noch laeuft - dann ist es ein
+   * Zwischenstand. Nuetzlich, um mitten in der Runde zu sehen, wer gerade
+   * Achterbahn faehrt.
+   */
+  app.get('/api/leagues/:id/results', async (request) => {
+    const userId = requireUser(request);
+    const { id } = request.params as { id: string };
+    await assertMember(ctx, userId, id);
+
+    const league = await ctx.trading.league(id);
+    const daten = await buildResults(ctx.db, id);
+
+    return { ...daten, status: league.status, finishedAt: league.finishedAt };
   });
 
   app.get('/api/leagues/:id', async (request) => {

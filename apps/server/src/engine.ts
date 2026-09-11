@@ -20,6 +20,7 @@ import {
   evaluateOrder,
   exposureCents,
   borrowFeeCents,
+  phaseAt,
   poolPrice,
   unrealizedPnlCents,
   xpForLevel,
@@ -66,6 +67,10 @@ export class Engine {
   /** Wann jeder Bot zuletzt hingeschaut hat. Ueberlebt keinen Neustart - das
    *  ist in Ordnung, dann faengt die Rechnung eben neu an. */
   private readonly botChecks = new Map<string, number>();
+  /** Zuletzt gemeldete Phase je Liga - fuer die Ansage beim Wechsel. */
+  private readonly phasen = new Map<string, string>();
+  /** Hitze je laufender Liga. Die hoechste gilt fuer den Markt. */
+  private readonly hitzen = new Map<string, number>();
 
   constructor(
     private readonly db: Db,
@@ -141,6 +146,7 @@ export class Engine {
       await this.processBots(league, quotes, at);
     }
 
+    this.trackPhase(league, at);
     await this.processPulls(league, at);
     await this.resolveBets(league, quotes, at);
     await this.checkLeagueEnd(league, at);
@@ -519,6 +525,49 @@ export class Engine {
   }
 
   // --------------------------------------------------------------- Bots
+
+  /**
+   * Haelt den Takt der Runde nach.
+   *
+   * Zwei Dinge passieren hier: Beim Wechsel in eine neue Phase bekommen alle
+   * eine Ansage, und die Hitze der heissesten laufenden Runde wird an den
+   * Markt weitergereicht.
+   *
+   * Warum global? Weil der Arena-Markt fuer alle Ligen derselbe ist. Es gibt
+   * keine Kurse "nur fuer diese Runde", also kann auch die Nervositaet keine
+   * Liga fuer sich haben. Dass der Markt wilder wird, wenn irgendwo ein
+   * Endspurt laeuft, ist dabei kein Behelf, sondern passt: Es ist ein Markt,
+   * an dem gerade viele Leute gleichzeitig nervoes werden.
+   */
+  private trackPhase(league: League, at: number): void {
+    const phase = phaseAt(league.startsAt, league.endsAt, at);
+    if (!phase) {
+      this.phasen.delete(league.id);
+      this.hitzen.delete(league.id);
+      return;
+    }
+
+    this.hitzen.set(league.id, phase.heat);
+
+    if (this.phasen.get(league.id) !== phase.key) {
+      const erster = !this.phasen.has(league.id);
+      this.phasen.set(league.id, phase.key);
+
+      // Beim allerersten Blick nicht ansagen - sonst begruesst der Server
+      // jeden Neustart mit einer Phasenmeldung an alle.
+      if (!erster) {
+        this.hub.broadcastLeague(league.id, 'round_phase', {
+          key: phase.key,
+          label: phase.label,
+          blurb: phase.blurb,
+          endsAt: league.endsAt,
+        });
+      }
+    }
+
+    const heisseste = Math.max(1, ...this.hitzen.values());
+    this.sim.setHeat(heisseste);
+  }
 
   private async processBots(
     league: League,
