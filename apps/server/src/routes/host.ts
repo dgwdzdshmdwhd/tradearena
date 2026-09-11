@@ -30,8 +30,15 @@ async function requireHost(ctx: Context, userId: string, leagueId: string): Prom
   return league;
 }
 
-/** Grenzen fuer hochgeladene Dateien. */
-const MEDIA_MAX_BYTES = 6 * 1024 * 1024;
+/**
+ * Grenze fuer hochgeladene Dateien.
+ *
+ * 25 MB reichen fuer einen Clip von rund einer Minute in ordentlicher
+ * Qualitaet. Deutlich hoeher wollen wir nicht: Die Datei geht als Ganzes durch
+ * den Arbeitsspeicher des Servers, und der hat auf dem Gratis-Tarif 512 MB.
+ */
+const MEDIA_MAX_BYTES = 25 * 1024 * 1024;
+
 const MEDIA_TYPES = [
   'image/png',
   'image/jpeg',
@@ -39,8 +46,21 @@ const MEDIA_TYPES = [
   'image/webp',
   'video/mp4',
   'video/webm',
+  'video/quicktime',
   'audio/mpeg',
 ];
+
+/** Endung je Typ - sie steht in der Adresse, damit der Client den Typ kennt. */
+const ENDUNGEN: Record<string, string> = {
+  'image/png': '.png',
+  'image/jpeg': '.jpg',
+  'image/gif': '.gif',
+  'image/webp': '.webp',
+  'video/mp4': '.mp4',
+  'video/webm': '.webm',
+  'video/quicktime': '.mov',
+  'audio/mpeg': '.mp3',
+};
 
 export function registerHostRoutes(app: FastifyInstance, ctx: Context): void {
   /** Wer ist in der Liga, wie steht er da - die Liste zum Anklicken. */
@@ -228,56 +248,93 @@ export function registerHostRoutes(app: FastifyInstance, ctx: Context): void {
   /**
    * Datei hochladen.
    *
-   * Landet in der Datenbank, nicht auf der Platte: Das Dateisystem des
-   * Servers wird bei jedem Deploy neu aufgesetzt, ein dort abgelegtes Video
-   * waere am naechsten Abend weg. Sechs Megabyte reichen fuer einen kurzen
-   * Clip und sprengen keine Gratis-Datenbank.
+   * Landet in der Datenbank, nicht auf der Platte: Das Dateisystem des Servers
+   * wird bei jedem Deploy neu aufgesetzt, ein dort abgelegtes Video waere am
+   * naechsten Abend weg.
+   *
+   * Der Koerper ist die Datei selbst, nicht JSON mit Base64. Base64 blaeht um
+   * ein Drittel auf und muesste komplett durch den JSON-Parser - bei einem
+   * 25-MB-Clip waeren das gut 35 MB Zeichenkette im Arbeitsspeicher, auf einem
+   * Gratis-Server mit 512 MB eine schlechte Idee.
    */
   app.post('/api/media', async (request) => {
     const userId = requireUser(request);
-    const body = request.body as { mime?: string; dataBase64?: string; name?: string };
 
-    const mime = String(body.mime ?? '');
+    const mime = String(request.headers['content-type'] ?? '').split(';')[0]!.trim();
     if (!MEDIA_TYPES.includes(mime)) {
-      throw badRequest('Nur Bilder, GIFs, MP4, WebM oder MP3.');
+      throw badRequest('Nur Bilder, GIFs, MP4, WebM, MOV oder MP3.');
     }
 
-    const base64 = String(body.dataBase64 ?? '');
-    const bytes = Math.floor((base64.length * 3) / 4);
-    if (bytes <= 0) throw badRequest('Datei ist leer.');
-    if (bytes > MEDIA_MAX_BYTES) {
-      throw badRequest(`Zu gross: ${(bytes / 1024 / 1024).toFixed(1)} MB, erlaubt sind 6 MB.`);
+    const daten = request.body;
+    if (!Buffer.isBuffer(daten) || daten.length === 0) throw badRequest('Datei ist leer.');
+    if (daten.length > MEDIA_MAX_BYTES) {
+      throw badRequest(
+        `Zu gross: ${(daten.length / 1024 / 1024).toFixed(1)} MB, erlaubt sind ${MEDIA_MAX_BYTES / 1024 / 1024} MB.`,
+      );
     }
 
     const id = newId();
+    const name = trimText(String(request.headers['x-datei-name'] ?? ''), 80);
+
     await ctx.db.run(
       'INSERT INTO media (id, user_id, mime, name, bytes, data, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
-      [id, userId, mime, trimText(body.name, 80), bytes, base64, now()],
+      [id, userId, mime, name, daten.length, daten.toString('base64'), now()],
     );
 
     // Aelteres desselben Nutzers wegraeumen, damit die Datenbank nicht
     // langsam mit vergessenen Clips volllaeuft.
     await ctx.db.run(
       `DELETE FROM media WHERE user_id = ? AND id NOT IN (
-         SELECT id FROM media WHERE user_id = ? ORDER BY created_at DESC LIMIT 12
+         SELECT id FROM media WHERE user_id = ? ORDER BY created_at DESC LIMIT 8
        )`,
       [userId, userId],
     );
 
-    return { id, url: `/api/media/${id}`, bytes };
+    // Die Endung steht mit Absicht in der Adresse: Der Client erkennt daran,
+    // ob er ein Bild, ein Video oder Ton anzeigen muss. Ohne sie landete ein
+    // Video in einem Bild-Element - und das zeigt schwarz.
+    return { id, url: `/api/media/${id}${ENDUNGEN[mime] ?? ''}`, bytes: daten.length, mime };
   });
 
-  /** Hochgeladene Datei ausliefern. */
-  app.get('/api/media/:id', async (request, reply) => {
-    const { id } = request.params as { id: string };
-    const row = await ctx.db.get<{ mime: string; data: string }>(
-      'SELECT mime, data FROM media WHERE id = ?',
+  /**
+   * Hochgeladene Datei ausliefern - mit Bereichsabfragen.
+   *
+   * Ohne `Range` spielt Safari gar kein Video ab, und Springen im Clip geht
+   * nirgends. Der Aufwand dafuer sind zwanzig Zeilen, also gibt es das.
+   */
+  app.get('/api/media/:file', async (request, reply) => {
+    const { file } = request.params as { file: string };
+    const id = String(file).split('.')[0] ?? '';
+
+    const row = await ctx.db.get<{ mime: string; data: string; bytes: number }>(
+      'SELECT mime, data, bytes FROM media WHERE id = ?',
       [id],
     );
     if (!row) throw notFound('Datei nicht gefunden.');
 
+    const ganz = Buffer.from(row.data, 'base64');
     reply.header('Content-Type', row.mime);
     reply.header('Cache-Control', 'public, max-age=86400, immutable');
-    return reply.send(Buffer.from(row.data, 'base64'));
+    reply.header('Accept-Ranges', 'bytes');
+
+    const range = String(request.headers.range ?? '');
+    const treffer = range.match(/bytes=(\d*)-(\d*)/);
+
+    if (treffer) {
+      const von = treffer[1] ? Number(treffer[1]) : 0;
+      const bis = treffer[2] ? Math.min(Number(treffer[2]), ganz.length - 1) : ganz.length - 1;
+
+      if (von >= ganz.length || von > bis) {
+        reply.header('Content-Range', `bytes */${ganz.length}`);
+        return reply.status(416).send();
+      }
+
+      reply.header('Content-Range', `bytes ${von}-${bis}/${ganz.length}`);
+      reply.header('Content-Length', bis - von + 1);
+      return reply.status(206).send(ganz.subarray(von, bis + 1));
+    }
+
+    reply.header('Content-Length', ganz.length);
+    return reply.send(ganz);
   });
 }

@@ -21,6 +21,8 @@ interface Uebernahme {
   mediaUrl: string;
   effect: string;
   bis: number;
+  /** Video oder Ton: endet von selbst, nicht nach fester Zeit. */
+  laeuftSelbst: boolean;
 }
 
 let zaehler = 0;
@@ -33,11 +35,11 @@ const EFFEKT_KLASSE: Record<string, string> = {
 };
 
 function istVideo(url: string): boolean {
-  return /\.(mp4|webm)(\?|$)/i.test(url);
+  return /\.(mp4|webm|mov|m4v)(\?|$)/i.test(url);
 }
 
 function istAudio(url: string): boolean {
-  return /\.(mp3|ogg)(\?|$)/i.test(url);
+  return /\.(mp3|ogg|m4a|wav)(\?|$)/i.test(url);
 }
 
 /** YouTube-Links in die einbettbare Form bringen. */
@@ -61,19 +63,33 @@ export function Takeover({ meUserId }: { meUserId: string }): JSX.Element | null
     if (ziel && ziel !== meUserId) return;
 
     const ms = Math.max(2_000, Math.min(60_000, Number(data.ms ?? 6_000)));
+    const url = String(data.mediaUrl ?? '');
+    /*
+     * Ein Video laeuft bis zum Ende, keine feste Zeit.
+     *
+     * Ein Clip, der nach sechs Sekunden abgeschnitten wird, ist kein Streich,
+     * sondern ein Fehler. Geschlossen wird er von `onEnded`; die Zeitschaltung
+     * unten ist nur die Reissleine, falls das Video haengt oder gar nicht
+     * erst laedt - sonst blockierte ein kaputter Link den Bildschirm fuer
+     * immer.
+     */
+    const laeuftSelbst = istVideo(url) || istAudio(url) || Boolean(youtube(url));
+    const dauer = laeuftSelbst ? 15 * 60_000 : ms;
+
     sounds.rug();
 
     setCurrent({
       id: (zaehler += 1),
       title: String(data.title ?? ''),
       text: String(data.text ?? ''),
-      mediaUrl: String(data.mediaUrl ?? ''),
+      mediaUrl: url,
       effect: String(data.effect ?? 'keiner'),
-      bis: Date.now() + ms,
+      bis: Date.now() + dauer,
+      laeuftSelbst,
     });
 
     if (timer.current) window.clearTimeout(timer.current);
-    timer.current = window.setTimeout(() => setCurrent(null), ms);
+    timer.current = window.setTimeout(() => setCurrent(null), dauer);
   });
 
   // Effekte haengen an der ganzen Seite, nicht an dieser Ebene.
@@ -114,16 +130,20 @@ export function Takeover({ meUserId }: { meUserId: string }): JSX.Element | null
                 src={current.mediaUrl}
                 autoPlay
                 playsInline
-                loop
-                className="max-h-[60vh] rounded-[var(--radius)]"
+                controls={false}
+                className="max-h-[72vh] w-auto rounded-[var(--radius)]"
+                onEnded={() => setCurrent(null)}
+                // Laesst sich der Clip nicht abspielen, soll der Bildschirm
+                // nicht stumm schwarz bleiben - dann lieber sofort weg.
+                onError={() => setCurrent(null)}
               />
             ) : istAudio(current.mediaUrl) ? (
-              <audio src={current.mediaUrl} autoPlay />
+              <audio src={current.mediaUrl} autoPlay onEnded={() => setCurrent(null)} />
             ) : (
               <img
                 src={current.mediaUrl}
                 alt=""
-                className="max-h-[60vh] rounded-[var(--radius)] object-contain"
+                className="max-h-[72vh] rounded-[var(--radius)] object-contain"
               />
             )}
           </div>
@@ -133,13 +153,16 @@ export function Takeover({ meUserId }: { meUserId: string }): JSX.Element | null
           <div className="max-w-[34rem] text-[17px] leading-relaxed">{current.text}</div>
         ) : null}
 
-        <Rest bis={current.bis} />
+        {current.laeuftSelbst ? null : <Rest bis={current.bis} />}
       </div>
     </div>
   );
 }
 
-/** Zeigt, wie lange es noch dauert - damit niemand denkt, es haengt. */
+/**
+ * Zeigt, wie lange es noch dauert - damit niemand denkt, es haengt.
+ * Bei einem Video waere die Zahl gelogen, dort laeuft der Clip bis zum Ende.
+ */
 function Rest({ bis }: { bis: number }): JSX.Element {
   const [sekunden, setSekunden] = useState(() => Math.ceil((bis - Date.now()) / 1000));
 

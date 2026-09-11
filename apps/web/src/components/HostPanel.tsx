@@ -380,30 +380,30 @@ function StreichReiter({
   const datei = useRef<HTMLInputElement | null>(null);
 
   const hochladen = async (file: File): Promise<void> => {
-    if (file.size > 6 * 1024 * 1024) {
+    if (file.size > 25 * 1024 * 1024) {
       pushToast({
         kind: 'error',
         title: 'Zu gross',
-        body: `${(file.size / 1024 / 1024).toFixed(1)} MB - erlaubt sind 6 MB.`,
+        body: `${(file.size / 1024 / 1024).toFixed(1)} MB - erlaubt sind 25 MB.`,
       });
       return;
     }
 
     setLaedt(true);
     try {
-      const base64 = await new Promise<string>((fertig, fehler) => {
-        const reader = new FileReader();
-        reader.onerror = () => fehler(new Error('Datei nicht lesbar.'));
-        reader.onload = () => fertig(String(reader.result).split(',')[1] ?? '');
-        reader.readAsDataURL(file);
+      // Die Datei geht roh raus, nicht als Base64 in JSON: Das spart ein
+      // Drittel Uebertragung und den Umweg ueber den JSON-Parser.
+      const antwort = await fetch('/api/media', {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'content-type': file.type, 'x-datei-name': encodeURIComponent(file.name) },
+        body: file,
       });
 
-      const r = await api.post<{ url: string }>('/api/media', {
-        mime: file.type,
-        name: file.name,
-        dataBase64: base64,
-      });
-      setMediaUrl(r.url);
+      const daten = (await antwort.json()) as { url?: string; error?: string };
+      if (!antwort.ok) throw new Error(daten.error ?? 'Hochladen fehlgeschlagen.');
+
+      setMediaUrl(daten.url ?? '');
       pushToast({ kind: 'success', title: 'Hochgeladen', body: file.name, icon: 'check' });
     } catch (error) {
       melden(error);
@@ -453,7 +453,7 @@ function StreichReiter({
             onChange={(e) => setTitel(e.target.value)}
           />
         </Field>
-        <Field label="Sekunden">
+        <Field label="Sekunden" hint="Video laeuft immer bis zum Ende">
           <input
             className="input"
             inputMode="numeric"
@@ -497,7 +497,7 @@ function StreichReiter({
           <Icon name="plus" size={12} />
           {laedt ? 'laedt ...' : 'Datei waehlen'}
         </button>
-        <span className="dimmer text-[12px]">bis 6 MB - Bild, GIF, MP4, WebM</span>
+        <span className="dimmer text-[12px]">bis 25 MB - Bild, GIF, MP4, WebM, MOV</span>
       </div>
 
       <Field label="Effekt auf dem Bildschirm">

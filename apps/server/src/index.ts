@@ -95,13 +95,28 @@ async function main(): Promise<void> {
   const app = Fastify({
     logger: false,
     // Reicht fuer alles im Spiel - nur hochgeladene Clips des Spielleiters
-    // sind groesser. Base64 blaeht um ein Drittel auf, deshalb neun Megabyte
-    // fuer sechs Megabyte Datei.
-    bodyLimit: 9 * 1024 * 1024,
+    // sind groesser. Die Grenze liegt knapp ueber den 25 MB aus host.ts, damit
+    // dort die verstaendliche Fehlermeldung greift und nicht hier der harte
+    // Abbruch ohne Erklaerung.
+    bodyLimit: 26 * 1024 * 1024,
     trustProxy: true,
   });
 
   await app.register(fastifyCookie);
+
+  /**
+   * Rohe Dateien annehmen.
+   *
+   * Fastify versteht von Haus aus nur JSON. Hochgeladene Bilder und Clips
+   * kommen als reiner Bytestrom - ohne diesen Parser antwortet der Server mit
+   * "Unsupported Media Type". Base64 in JSON waere die Alternative gewesen,
+   * blaeht aber um ein Drittel auf und muss komplett durch den JSON-Parser.
+   */
+  app.addContentTypeParser(
+    ['image/png', 'image/jpeg', 'image/gif', 'image/webp', 'video/mp4', 'video/webm', 'video/quicktime', 'audio/mpeg'],
+    { parseAs: 'buffer' },
+    (_request, payload, done) => done(null, payload),
+  );
 
   /**
    * Sicherheitsnetz: `JSON.stringify` kann mit bigint nicht umgehen und wirft
